@@ -1,7 +1,7 @@
 # Handelsregister API 
 
 
-Das Handelsregister stellt ein öffentliches Verzeichnis dar,das im Rahmen des Registerrechts Eintragungen über die angemeldeten Kaufleute in einem bestimmten geografischen Raum führt. 
+Das Handelsregister stellt ein öffentliches Verzeichnis dar, das im Rahmen des Registerrechts Eintragungen über die angemeldeten Kaufleute in einem bestimmten geografischen Raum führt. 
 Eintragungspflichtig sind die im HGB, AktG und GmbHG abschließend aufgezählten Tatsachen oder Rechtsverhältnisse. Eintragungsfähig sind weitere Tatsachen, wenn Sinn und Zweck des Handelsregisters die Eintragung erfordern und für ihre Eintragung ein erhebliches Interesse des Rechtsverkehrs besteht.
 
 Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumente ist daher gemäß § 9 Abs. 1 HGB jeder und jedem zu Informationszwecken gestattet, wobei es unzulässig ist, mehr als 60 Abrufe pro Stunde zu tätigen (vgl. https://www.handelsregister.de/rp_web/nutzungsordnung.do). Die Recherche nach einzelnen Firmen, die Einsicht in die Unternehmensträgerdaten und die Nutzung der Handelsregisterbekanntmachungen ist kostenfrei möglich, wohingegen der Abruf der zu einer Registernummer angebotenen Handelsregisterinformationen (Aktueller Ausdruck, Chronologischer Ausdruck, Historischer Ausdruck, Unternehmensträgerdaten, Dokumentenabruf, Strukturierter Registerinhalt) jedoch gebührenpflichtig ist (vgl. https://www.handelsregister.de/rp_web/faq.do).
