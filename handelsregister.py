@@ -39,6 +39,8 @@ class HandelsRegister:
         self.browser.open("https://www.handelsregister.de", timeout=10)
 
     def search_company(self, exact_name):
+        # TODO implement token bucket to abide by rate limit
+        # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
         response_search = self.browser.follow_link(text="Advanced search")
 
         print(self.browser.title())
