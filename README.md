@@ -1,6 +1,5 @@
 # Handelsregister API 
 
-
 Das Handelsregister stellt ein öffentliches Verzeichnis dar, das im Rahmen des Registerrechts Eintragungen über die angemeldeten Kaufleute in einem bestimmten geografischen Raum führt. 
 Eintragungspflichtig sind die im HGB, AktG und GmbHG abschließend aufgezählten Tatsachen oder Rechtsverhältnisse. Eintragungsfähig sind weitere Tatsachen, wenn Sinn und Zweck des Handelsregisters die Eintragung erfordern und für ihre Eintragung ein erhebliches Interesse des Rechtsverkehrs besteht.
 
@@ -11,8 +10,9 @@ Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumen
 
 ## Handelsregister
 
-***URL:*** www.handelsregister.de/rp_web/search.do
+### Datenstruktur
 
+***URL:*** www.handelsregister.de/rp_web/search.do
 
 Das gemeinsame Registerportal der Länder ermöglicht jeder und jedem die Recherche nach einzelnen Firmen zu Informationszwecken. Einträge lassen sich dabei über verschiedene Parameter im Body eines POST-request filtern:
 
@@ -241,4 +241,22 @@ Ort (Angaben nur zur Hauptniederlassung). Beispielsweise Feucht. Zulässige Plat
 Straße (Angaben nur zur Hauptniederlassung). Beispielsweise Teststraße 2. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
 
 
+### Command-line Interface
 
+Das CLI ist _work in progress_ und 
+
+```
+usage: handelsregister.py [-h] [-d] [-f] -s SCHLAGWOERTER [-so {all,min,exact}]
+
+A handelsregister CLI
+
+options:
+  -h, --help            show this help message and exit
+  -d, --debug           Enable debug mode and activate logging
+  -f, --force           Force a fresh pull and skip the cache
+  -s SCHLAGWOERTER, --schlagwoerter SCHLAGWOERTER
+                        Search for the provided keywords
+  -so {all,min,exact}, --schlagwortOptionen {all,min,exact}
+                        Keyword options: all=contain all keywords; min=contain at least one
+                        keyword; exact=contain the exact company name.
+```
