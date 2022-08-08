@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 mechanize = "*"
 mechanicalsoup = "*"
+selenium = "*"
 
 [dev-packages]
 black = "*"
