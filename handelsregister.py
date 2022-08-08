@@ -1,24 +1,67 @@
 #!/usr/bin/env python3
+"""
+bundesAPI/handelsregister is the command-line interface for for the shared register of companies portal for the German federal states.
+You can query, download, automate and much more, without using a web browser.
+"""
 
-import logging
+import argparse
 import mechanize
 import re
 import pathlib
 import sys
 from bs4 import BeautifulSoup
 
-logger = logging.getLogger("mechanize")
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.DEBUG)
+# Parse arguments
+parser = argparse.ArgumentParser(description='A handelsregister CLI')
+parser.add_argument(
+                      "-d",
+                      "--debug",
+                      help="Enable debug mode and activate logging",
+                      action="store_true"
+                    )
+parser.add_argument(
+                      "-f",
+                      "--force",
+                      help="Force a fresh pull and skip the cache",
+                      action="store_true"
+                    )
+parser.add_argument(
+                      "-s",
+                      "--schlagwoerter",
+                      help="Search for the provided keywords",
+                      required=True,
+                      default="Gasag AG" # TODO replace default with a generic search term
+                    )
+parser.add_argument(
+                      "-so",
+                      "--schlagwortOptionen",
+                      help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
+                      choices=["all", "min", "exact"],
+                      default="all"
+                    )
+args = parser.parse_args()
 
+# Dictionaries to map arguments to values
+schlagwortOptionen = {
+  "all": 1,
+  "min": 2,
+  "exact": 3
+}
+
+# Enable debugging if wanted
+if args.debug == True:
+    import logging
+    logger = logging.getLogger("mechanize")
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    logger.setLevel(logging.DEBUG)
 
 class HandelsRegister:
     def __init__(self):
         self.browser = mechanize.Browser()
 
-        self.browser.set_debug_http(True)
-        self.browser.set_debug_responses(True)
-        # browser.set_debug_redirects(True)
+        self.browser.set_debug_http(args.debug)
+        self.browser.set_debug_responses(args.debug)
+        # self.browser.set_debug_redirects(True)
 
         self.browser.set_handle_robots(False)
         self.browser.set_handle_equiv(True)
@@ -32,15 +75,16 @@ class HandelsRegister:
                 "User-Agent",
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
             ),
-            ("Accept-Language", "en-GB,en;q=0.9"),
-            ("Accept-Encoding", "gzip, deflate, br"),
+            (   "Accept-Language", "en-GB,en;q=0.9"   ),
+            (   "Accept-Encoding", "gzip, deflate, br"    ),
             (
                 "Accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             ),
-            ("Connection", "keep-alive"),
+            (   "Connection", "keep-alive"    ),
         ]
-        self.cachedir = pathlib.Path('cache')
+        
+        self.cachedir = pathlib.Path("cache")
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
@@ -51,32 +95,32 @@ class HandelsRegister:
         # webserver less often.
         return self.cachedir / companyname
 
-    def search_company(self, exact_name, force=False):
-        # force = True skips the cache.
-        cachename = self.companyname2cachename(exact_name)
+    def search_company(self):
+        cachename = self.companyname2cachename(args.schlagwoerter)
         if force==False and cachename.exists():
-            with open(cachename, 'r') as f:
+            with open(cachename, "r") as f:
                 html = f.read()
-                print('return cached content for %s' % exact_name)
+                print("return cached content for %s" % args.schlagwoerter)
         else:
-
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
             response_search = self.browser.follow_link(text="Advanced search")
 
-            print(self.browser.title())
+            if args.debug == True:
+                print(self.browser.title())
 
             self.browser.select_form(name="form")
 
-            self.browser["form:schlagwoerter"] = exact_name
-            self.browser["form:schlagwortOptionen"] = ["3"] # 3 -> contain the exact name of the company.
+            self.browser["form:schlagwoerter"] = args.schlagwoerter
+            self.browser["form:schlagwortOptionen"] = schlagwortOptionen.get(args.schlagwortOptionen)
 
             response_result = self.browser.submit()
 
-            print(self.browser.title())
+            if args.debug == True:
+                print(self.browser.title())
 
             html = response_result.read().decode("utf-8")
-            with open(self.cachedir / exact_name, 'w') as f:
+            with open(self.cachedir / exact_name, "w") as f:
                 f.write(html)
 
             # TODO catch the situation if there's more than one company?
@@ -84,7 +128,6 @@ class HandelsRegister:
             # TODO parse useful information out of the PDFs
 
         return html
-
 
 def parse_result(result):
     cells = []
@@ -128,12 +171,11 @@ def get_companies_in_searchresults(fn):
                 results.append(d)
     return results
 
+
 if __name__ == "__main__":
-    companyname = 'Gasag AG'
-    #companyname = '1&1 Mail & Media Development & Technology GmbH'
     h = HandelsRegister()
     h.open_startpage()
-    h.search_company(companyname)
-    companies = get_companies_in_searchresults(h.companyname2cachename(companyname))
+    h.search_company()
+    companies = get_companies_in_searchresults(h.companyname2cachename(args.schlagwoerter))
     for c in companies:
         pr_company_info(c)
