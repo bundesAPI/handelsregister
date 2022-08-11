@@ -97,7 +97,7 @@ class HandelsRegister:
 
     def search_company(self):
         cachename = self.companyname2cachename(args.schlagwoerter)
-        if force==False and cachename.exists():
+        if args.force==False and cachename.exists():
             with open(cachename, "r") as f:
                 html = f.read()
                 print("return cached content for %s" % args.schlagwoerter)
@@ -126,8 +126,8 @@ class HandelsRegister:
             # TODO catch the situation if there's more than one company?
             # TODO get all documents attached to the exact company
             # TODO parse useful information out of the PDFs
+        return get_companies_in_searchresults(html)
 
-        return html
 
 def parse_result(result):
     cells = []
@@ -156,26 +156,24 @@ def pr_company_info(c):
     for name, loc in c.get('history'):
         print(name, loc)
 
-def get_companies_in_searchresults(fn):
-    with open(fn, 'r') as f:
-        soup = BeautifulSoup(f, 'html.parser')
-        grid = soup.find('table', role='grid')
-        #print('grid: %s', grid)
-      
-        results = []
-        for result in grid.find_all('tr'):
-            if a := result.get('data-ri'):
-                index = int(a)
-                #print('r[%d] %s' % (index, result))
-                d = parse_result(result)
-                results.append(d)
+def get_companies_in_searchresults(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    grid = soup.find('table', role='grid')
+    #print('grid: %s', grid)
+  
+    results = []
+    for result in grid.find_all('tr'):
+        if a := result.get('data-ri'):
+            index = int(a)
+            #print('r[%d] %s' % (index, result))
+            d = parse_result(result)
+            results.append(d)
     return results
 
 
 if __name__ == "__main__":
     h = HandelsRegister()
     h.open_startpage()
-    h.search_company()
-    companies = get_companies_in_searchresults(h.companyname2cachename(args.schlagwoerter))
-    for c in companies:
-        pr_company_info(c)
+    if companies := h.search_company():
+        for c in companies:
+            pr_company_info(c)
