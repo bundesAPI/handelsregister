@@ -11,52 +11,8 @@ import pathlib
 import sys
 from bs4 import BeautifulSoup
 
-# Parse arguments
-parser = argparse.ArgumentParser(description='A handelsregister CLI')
-parser.add_argument(
-                      "-d",
-                      "--debug",
-                      help="Enable debug mode and activate logging",
-                      action="store_true"
-                    )
-parser.add_argument(
-                      "-f",
-                      "--force",
-                      help="Force a fresh pull and skip the cache",
-                      action="store_true"
-                    )
-parser.add_argument(
-                      "-s",
-                      "--schlagwoerter",
-                      help="Search for the provided keywords",
-                      required=True,
-                      default="Gasag AG" # TODO replace default with a generic search term
-                    )
-parser.add_argument(
-                      "-so",
-                      "--schlagwortOptionen",
-                      help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
-                      choices=["all", "min", "exact"],
-                      default="all"
-                    )
-args = parser.parse_args()
-
-# Dictionaries to map arguments to values
-schlagwortOptionen = {
-  "all": 1,
-  "min": 2,
-  "exact": 3
-}
-
-# Enable debugging if wanted
-if args.debug == True:
-    import logging
-    logger = logging.getLogger("mechanize")
-    logger.addHandler(logging.StreamHandler(sys.stdout))
-    logger.setLevel(logging.DEBUG)
-
 class HandelsRegister:
-    def __init__(self):
+    def __init__(self, args):
         self.browser = mechanize.Browser()
 
         self.browser.set_debug_http(args.debug)
@@ -120,7 +76,7 @@ class HandelsRegister:
                 print(self.browser.title())
 
             html = response_result.read().decode("utf-8")
-            with open(self.cachedir / exact_name, "w") as f:
+            with open(cachename, "w") as f:
                 f.write(html)
 
             # TODO catch the situation if there's more than one company?
@@ -133,7 +89,7 @@ def parse_result(result):
     cells = []
     for cellnum, cell in enumerate(result.find_all('td')):
         #print('[%d]: %s [%s]' % (cellnum, cell.text, cell))
-        cells.append(cell.text)
+        cells.append(cell.text.strip())
     assert cells[7] == 'History'
     d = {}
     d['court'] = cells[1]
@@ -170,9 +126,56 @@ def get_companies_in_searchresults(html):
             results.append(d)
     return results
 
+def parse_args():
+# Parse arguments
+    parser = argparse.ArgumentParser(description='A handelsregister CLI')
+    parser.add_argument(
+                          "-d",
+                          "--debug",
+                          help="Enable debug mode and activate logging",
+                          action="store_true"
+                        )
+    parser.add_argument(
+                          "-f",
+                          "--force",
+                          help="Force a fresh pull and skip the cache",
+                          action="store_true"
+                        )
+    parser.add_argument(
+                          "-s",
+                          "--schlagwoerter",
+                          help="Search for the provided keywords",
+                          required=True,
+                          default="Gasag AG" # TODO replace default with a generic search term
+                        )
+    parser.add_argument(
+                          "-so",
+                          "--schlagwortOptionen",
+                          help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
+                          choices=["all", "min", "exact"],
+                          default="all"
+                        )
+    args = parser.parse_args()
+
+# Dictionaries to map arguments to values
+    schlagwortOptionen = {
+      "all": 1,
+      "min": 2,
+      "exact": 3
+    }
+
+# Enable debugging if wanted
+    if args.debug == True:
+        import logging
+        logger = logging.getLogger("mechanize")
+        logger.addHandler(logging.StreamHandler(sys.stdout))
+        logger.setLevel(logging.DEBUG)
+
+    return args
 
 if __name__ == "__main__":
-    h = HandelsRegister()
+    args = parse_args()
+    h = HandelsRegister(args)
     h.open_startpage()
     if companies := h.search_company():
         for c in companies:
