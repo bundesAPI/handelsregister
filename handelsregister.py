@@ -75,8 +75,8 @@ class HandelsRegister:
 
             self.browser.select_form(name="form")
 
-            self.browser["form:schlagwoerter"] = args.schlagwoerter
-            so_id = schlagwortOptionen.get(args.schlagwortOptionen)
+            self.browser["form:schlagwoerter"] = self.args.schlagwoerter
+            so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
             self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
