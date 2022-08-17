@@ -1,0 +1,38 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[tool.poetry.dependencies]
+python = ">3.6.2,<4"
+mechanize = "*"
+mechanicalsoup = "*"
+
+[tool.poetry.dev-dependencies]
+black = "^22.6.0"
+
+[tool.poetry]
+name = "handelsregister"
+version = "0.1.0"
+description = ""
+authors = ["BundesAPI <kontakt@bund.dev>"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py36,py37,py38,py310
+isolated_build = True
+
+[tox:.package]
+basepython = python3
+
+[testenv]
+deps = pytest
+usedevelop = true
+commands =
+    pytest
+"""

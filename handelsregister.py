@@ -11,8 +11,16 @@ import pathlib
 import sys
 from bs4 import BeautifulSoup
 
+# Dictionaries to map arguments to values
+schlagwortOptionen = {
+    "all": 1,
+    "min": 2,
+    "exact": 3
+}
+
 class HandelsRegister:
     def __init__(self, args):
+        self.args = args
         self.browser = mechanize.Browser()
 
         self.browser.set_debug_http(args.debug)
@@ -52,27 +60,29 @@ class HandelsRegister:
         return self.cachedir / companyname
 
     def search_company(self):
-        cachename = self.companyname2cachename(args.schlagwoerter)
-        if args.force==False and cachename.exists():
+        cachename = self.companyname2cachename(self.args.schlagwoerter)
+        if self.args.force==False and cachename.exists():
             with open(cachename, "r") as f:
                 html = f.read()
-                print("return cached content for %s" % args.schlagwoerter)
+                print("return cached content for %s" % self.args.schlagwoerter)
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
             response_search = self.browser.follow_link(text="Advanced search")
 
-            if args.debug == True:
+            if self.args.debug == True:
                 print(self.browser.title())
 
             self.browser.select_form(name="form")
 
             self.browser["form:schlagwoerter"] = args.schlagwoerter
-            self.browser["form:schlagwortOptionen"] = schlagwortOptionen.get(args.schlagwortOptionen)
+            so_id = schlagwortOptionen.get(args.schlagwortOptionen)
+
+            self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
             response_result = self.browser.submit()
 
-            if args.debug == True:
+            if self.args.debug == True:
                 print(self.browser.title())
 
             html = response_result.read().decode("utf-8")
@@ -90,7 +100,7 @@ def parse_result(result):
     for cellnum, cell in enumerate(result.find_all('td')):
         #print('[%d]: %s [%s]' % (cellnum, cell.text, cell))
         cells.append(cell.text.strip())
-    assert cells[7] == 'History'
+    #assert cells[7] == 'History'
     d = {}
     d['court'] = cells[1]
     d['name'] = cells[2]
@@ -119,7 +129,8 @@ def get_companies_in_searchresults(html):
   
     results = []
     for result in grid.find_all('tr'):
-        if a := result.get('data-ri'):
+        a = result.get('data-ri')
+        if a is not None:
             index = int(a)
             #print('r[%d] %s' % (index, result))
             d = parse_result(result)
@@ -157,14 +168,8 @@ def parse_args():
                         )
     args = parser.parse_args()
 
-# Dictionaries to map arguments to values
-    schlagwortOptionen = {
-      "all": 1,
-      "min": 2,
-      "exact": 3
-    }
 
-# Enable debugging if wanted
+    # Enable debugging if wanted
     if args.debug == True:
         import logging
         logger = logging.getLogger("mechanize")
@@ -177,6 +182,7 @@ if __name__ == "__main__":
     args = parse_args()
     h = HandelsRegister(args)
     h.open_startpage()
-    if companies := h.search_company():
+    companies = h.search_company()
+    if companies is not None:
         for c in companies:
             pr_company_info(c)

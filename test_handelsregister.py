@@ -1,6 +1,6 @@
 import pytest
-from handelsregister import get_companies_in_searchresults
-
+from handelsregister import get_companies_in_searchresults,HandelsRegister
+import argparse
 
 def test_parse_search_result():
     # simplified html from a real search
@@ -14,3 +14,11 @@ def test_parse_search_result():
             'documents': 'ADCDHDDKUTVÖSI',
             'history':[('1.) Gasag Berliner Gaswerke Aktiengesellschaft', '1.) Berlin')]
             },]
+
+
+def test_get_results():
+    args = argparse.Namespace(debug=False, force=False, schlagwoerter='deutsche bahn', schlagwortOptionen='all')
+    h = HandelsRegister(args)
+    h.open_startpage()
+    companies = h.search_company()
+    assert len(companies) > 0
