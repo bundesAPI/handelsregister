@@ -7,6 +7,7 @@ You can query, download, automate and much more, without using a web browser.
 import argparse
 import mechanize
 import re
+import pathlib
 import sys
 from bs4 import BeautifulSoup
 
@@ -34,12 +35,12 @@ class HandelsRegister:
         self.browser.set_handle_referer(True)
 
         self.browser.addheaders = [
-            # (
-            #     "User-Agent",
-            #     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
-            # ),
-            ("Accept-Language", "en-GB,en;q=0.9"),
-            ("Accept-Encoding", "gzip, deflate, br"),
+            (
+                "User-Agent",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
+            ),
+            (   "Accept-Language", "en-GB,en;q=0.9"   ),
+            (   "Accept-Encoding", "gzip, deflate, br"    ),
             (
                 "Accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -79,16 +80,7 @@ class HandelsRegister:
 
             self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
-        # for link in self.browser.links():
-        #     print(link)
-
-        print("Trying to click AD link")
-        ad_link = self.browser.follow_link(text_regex=re.compile("ADCurrent"))
-
-        print(self.browser.title())
-
-        html = response_result.read().decode("utf-8")
-        open("output.html", "w").write(html)
+            response_result = self.browser.submit()
 
             if self.args.debug == True:
                 print(self.browser.title())
