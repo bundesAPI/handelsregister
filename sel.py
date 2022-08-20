@@ -35,7 +35,6 @@ options.add_experimental_option("prefs", {
     "download.directory_upgrade": True})
 
 options.headless = True
-# options.add_argument("--headless")
 
 driver = webdriver.Chrome(options=options)
 
