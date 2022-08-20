@@ -40,15 +40,29 @@ print(exact_radio)
 search_button = driver.find_element(By.XPATH, "//button[@id='form:btnSuche']")
 search_button.click()
 
-ad_link = WebDriverWait(driver, 10).until(
-    EC.visibility_of_element_located((By.XPATH, "//a[span[contains(text(), 'AD')]]"))
-)
-ad_link.click()
+document_list = ['AD',
+    'CD',
+    'HD',
+    # 'DK',
+    # 'UT',
+    # 'VÖ',
+    'SI']
 
-download_button = driver.find_element(
-    By.XPATH, "//button[@id='form:kostenpflichtigabrufen']"
+for doc_type in document_list:
+    print(f"Getting document {doc_type}")
+
+    ad_link = WebDriverWait(driver, 10).until(
+    EC.visibility_of_element_located((By.XPATH, f"//a[span[contains(text(), '{doc_type}')]]"))
 )
-download_button.click()
+    ad_link.click()
+
+
+    download_button = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, "//button[@id='form:kostenpflichtigabrufen']")))
+    download_button.click()
+
+    time.sleep(3)
+
+    driver.back()
 
 # TODO make work for headless
 # TODO see if ChromeDriver works smoother
@@ -57,7 +71,7 @@ download_button.click()
 
 # TODO move all the files to a subfolder when done
 
-time.sleep(20)
+# time.sleep(20)
 
 open("output.html", "w").write(driver.page_source)
 
