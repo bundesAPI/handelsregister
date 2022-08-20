@@ -1,0 +1,9 @@
+Pipfile.lock
+geckodriver.log
+
+.DS_Store
+
+*.pdf
+*.zip
+*.xml
+*.tif
