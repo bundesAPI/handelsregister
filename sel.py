@@ -64,7 +64,7 @@ for doc_type in document_list:
     download_button = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, "//button[@id='form:kostenpflichtigabrufen']")))
     download_button.click()
 
-    time.sleep(3)
+    time.sleep(10)
 
     driver.back()
 
