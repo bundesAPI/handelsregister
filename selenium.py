@@ -7,8 +7,12 @@ from selenium.webdriver.support import expected_conditions as EC
 import os
 import time
 
+# Need to set an environment variable to set headless window size
+os.environ['MOZ_HEADLESS_WIDTH'] = '1920'
+os.environ['MOZ_HEADLESS_HEIGHT'] = '1080'
+
 options = Options()
-# options.headless = True
+options.headless = True
 
 options.set_preference("browser.download.folderList", 2)
 options.set_preference("browser.download.manager.showWhenStarting", False)
