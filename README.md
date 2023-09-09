@@ -12,7 +12,7 @@ Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumen
 
 ### Datenstruktur
 
-***URL:*** www.handelsregister.de/rp_web/search.do
+***URL:*** https://www.handelsregister.de/rp_web/erweitertesuche.xhtml
 
 Das gemeinsame Registerportal der Länder ermöglicht jeder und jedem die Recherche nach einzelnen Firmen zu Informationszwecken. Einträge lassen sich dabei über verschiedene Parameter im Body eines POST-request filtern:
 
