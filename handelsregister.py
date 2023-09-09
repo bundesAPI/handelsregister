@@ -74,11 +74,18 @@ class HandelsRegister:
                 print(self.browser.title())
 
             self.browser.select_form(name="form")
+        
 
             self.browser["form:schlagwoerter"] = self.args.schlagwoerter
             so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
             self.browser["form:schlagwortOptionen"] = [str(so_id)]
+            if hasattr(self.args, "NiederlassungSitz") and self.args.NiederlassungSitz != None:
+                self.browser["form:NiederlassungSitz"] = self.args.NiederlassungSitz
+            if hasattr(self.args, "registerArt") and self.args.registerArt != None:
+                self.browser["form:registerArt_focus"] = self.args.registerArt
+            if hasattr(self.args, "registerNummer") and self.args.registerNummer != None:
+                self.browser["form:rechtsform_input"] = [str(self.args.rechtsform)]
 
             response_result = self.browser.submit()
 
@@ -86,8 +93,10 @@ class HandelsRegister:
                 print(self.browser.title())
 
             html = response_result.read().decode("utf-8")
+
             with open(cachename, "w") as f:
                 f.write(html)
+            
 
             # TODO catch the situation if there's more than one company?
             # TODO get all documents attached to the exact company
@@ -166,6 +175,28 @@ def parse_args():
                           choices=["all", "min", "exact"],
                           default="all"
                         )
+    parser.add_argument(
+                            "-NiS",
+                            "--NiederlassungSitz",
+                            help="Niederlassung/Sitz: all=All locations; A=Headquarters; B=Branch",
+                            default=""
+    )
+    parser.add_argument(
+                            "-rA",
+                            "--registerArt",
+                            help="Register art: all=All registers; HRA=Commercial register; HRB=Local court register; GnR=General notary register; PR=Partnership register; VR=Association register",
+                            default="",
+                            choices=["all", "HRA", "HRB", "GnR", "PR", "VR"]
+                            )
+    parser.add_argument(
+                            "-rF",
+                            "--rechtsform",
+                            help="""1=Aktiengesellschaft; 2=eingetragene Genossenschaft; 3=eingetragener Verein; 4=Einzelkauffrau; 5=Einzelkaufmann; 6=Europäische Aktiengesellschaft (SE); 7=Europäische wirtschaftliche Interessenvereinigung; 8=Gesellschaft mit beschränkter Haftung; 9=HRA Juristische Person; 10=Kommanditgesellschaft; 12=Offene Handelsgesellschaft; 13=Partnerschaft; 14=Rechtsform ausländischen Rechts GnR; 15=Rechtsform ausländischen Rechts HRA; 16=Rechtsform ausländischen Rechts HRb; 17=Rechtsform ausländischen Rechts PR; 18=Seerechtliche Gesellschaft; 19=Versicherungsverein auf Gegenseitigkeit; 40=Anstalt öffentlichen Rechts; 46=Bergrechtliche Gesellschaft; 48=Körperschaft öffentlichen Rechts; 49= Europäische Genossenschaft (SCE); 51=Stiftung privaten Rechts; 52=Stiftung öffentlichen Rechts; 53=HRA sonstige Rechtsformen; 54=Sonstige juristische Person; 55=Einzelkaufmann/Einzelkauffrau""",
+                            default=""
+    )
+                            
+                            
+                            
     args = parser.parse_args()
 
 
