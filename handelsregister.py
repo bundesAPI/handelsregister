@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-bundesAPI/handelsregister is the command-line interface for for the shared register of companies portal for the German federal states.
+bundesAPI/handelsregister is the command-line interface for the shared register of companies portal for the German federal states.
 You can query, download, automate and much more, without using a web browser.
 """
 
