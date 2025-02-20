@@ -52,7 +52,7 @@ class HandelsRegister:
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
-        self.browser.open("https://www.handelsregister.de", timeout=10)
+        self.browser.open(mechanize.Request("https://www.handelsregister.de/rp_web/erweitertesuche.xhtml", method="POST"), timeout=10)
 
     def companyname2cachename(self, companyname):
         # map a companyname to a filename, that caches the downloaded HTML, so re-running this script touches the
@@ -68,7 +68,6 @@ class HandelsRegister:
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            response_search = self.browser.follow_link(text="Advanced search")
 
             if self.args.debug == True:
                 print(self.browser.title())
