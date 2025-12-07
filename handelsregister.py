@@ -5,6 +5,7 @@ You can query, download, automate and much more, without using a web browser.
 """
 
 import argparse
+import tempfile
 import mechanize
 import re
 import pathlib
@@ -48,7 +49,7 @@ class HandelsRegister:
             (   "Connection", "keep-alive"    ),
         ]
         
-        self.cachedir = pathlib.Path("cache")
+        self.cachedir = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
@@ -68,7 +69,10 @@ class HandelsRegister:
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            response_search = self.browser.follow_link(text="Advanced search")
+            self.browser.select_form(name="naviForm")
+            self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
+            self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
+            response_search = self.browser.submit()
 
             if self.args.debug == True:
                 print(self.browser.title())
@@ -95,6 +99,7 @@ class HandelsRegister:
         return get_companies_in_searchresults(html)
 
 
+
 def parse_result(result):
     cells = []
     for cellnum, cell in enumerate(result.find_all('td')):
@@ -103,20 +108,37 @@ def parse_result(result):
     #assert cells[7] == 'History'
     d = {}
     d['court'] = cells[1]
+    
+    # Extract register number (e.g. HRB 12345, VR 6789)
+    # Looking for patterns like HRB, HRA, VR, GnR followed by numbers
+    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+', d['court'])
+    d['register_num'] = reg_match.group(0) if reg_match else None
+
+    # Extract district (e.g. "Charlottenburg" from "District court Berlin (Charlottenburg)")
+    # We look for text inside parentheses that is NOT the register number part if that happened to be in parens (unlikely for this format)
+    # The format seems to be: "City District court City (District) ..."
+    # We'll just grab the content of the first parenthesized group that looks like a name.
+    dist_match = re.search(r'\(([^)]+)\)', d['court'])
+    d['district'] = dist_match.group(1) if dist_match else None
+
     d['name'] = cells[2]
     d['state'] = cells[3]
-    d['status'] = cells[4]
+    d['status'] = cells[4].strip().upper().replace(' ', '_')
     d['documents'] = cells[5] # todo: get the document links
     d['history'] = []
     hist_start = 8
-    hist_cnt = (len(cells)-hist_start)/3
+    # hist_cnt = (len(cells)-hist_start)/3
     for i in range(hist_start, len(cells), 3):
+        if i + 1 >= len(cells):
+            break
+        if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
+            break
         d['history'].append((cells[i], cells[i+1])) # (name, location)
     #print('d:',d)
     return d
 
 def pr_company_info(c):
-    for tag in ('name', 'court', 'state', 'status'):
+    for tag in ('name', 'court', 'register_num', 'district', 'state', 'status'):
         print('%s: %s' % (tag, c.get(tag, '-')))
     print('history:')
     for name, loc in c.get('history'):
@@ -166,6 +188,12 @@ def parse_args():
                           choices=["all", "min", "exact"],
                           default="all"
                         )
+    parser.add_argument(
+                          "-j",
+                          "--json",
+                          help="Return response as JSON",
+                          action="store_true"
+                        )
     args = parser.parse_args()
 
 
@@ -179,10 +207,14 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
+    import json
     args = parse_args()
     h = HandelsRegister(args)
     h.open_startpage()
     companies = h.search_company()
     if companies is not None:
-        for c in companies:
-            pr_company_info(c)
+        if args.json:
+            print(json.dumps(companies))
+        else:
+            for c in companies:
+                pr_company_info(c)
