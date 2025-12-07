@@ -10,7 +10,8 @@ def test_parse_search_result():
             'register_num': 'HRB 44343 B',
             'name':'GASAG AG',
             'state':'Berlin',
-            'status':'CURRENTLY_REGISTERED',
+            'status':'currently registered',  # Original value for backward compatibility
+            'statusCurrent':'CURRENTLY_REGISTERED',  # Transformed value
             'documents': 'ADCDHDDKUTVÖSI',
             'history':[('1.) Gasag Berliner Gaswerke Aktiengesellschaft', '1.) Berlin')]
             },]

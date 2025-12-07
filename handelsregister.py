@@ -141,7 +141,7 @@ def parse_result(result):
     return d
 
 def pr_company_info(c):
-    for tag in ('name', 'court', 'register_num', 'northDataUrl', 'district', 'state', 'status'):
+    for tag in ('name', 'court', 'register_num', 'district', 'state', 'statusCurrent'):
         print('%s: %s' % (tag, c.get(tag, '-')))
     print('history:')
     for name, loc in c.get('history'):
