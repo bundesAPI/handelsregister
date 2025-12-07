@@ -107,15 +107,14 @@ def parse_result(result):
     d['court'] = cells[1]
     
     # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
-    # Also capture suffix letter if present (e.g. HRB 12345 B)
-    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Za-z])?', d['court'])
+    # Also capture suffix letter if present (e.g. HRB 12345 B), but avoid matching start of words (e.g. " Formerly")
+    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', d['court'])
     d['register_num'] = reg_match.group(0) if reg_match else None
 
-    # We look for text inside parentheses that is NOT the register number part if that happened to be in parens (unlikely for this format)
-    # The format seems to be: "City District court City (District) ..."
-    # We'll just grab the content of the first parenthesized group that looks like a name.
-    dist_match = re.search(r'\(([^)]+)\)', d['court'])
-    d['district'] = dist_match.group(1) if dist_match else None
+    # Special handling for Berlin (Charlottenburg): HRB numbers often imply a "B" suffix in external systems (like North Data)
+    if d['register_num'] and d['register_num'].startswith('HRB') and 'Berlin (Charlottenburg)' in d['court']:
+        if not d['register_num'].endswith(' B'):
+            d['register_num'] += ' B'
 
     d['name'] = cells[2]
     d['state'] = cells[3]
@@ -130,12 +129,6 @@ def parse_result(result):
         if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
             break
         d['history'].append((cells[i], cells[i+1])) # (name, location)
-
-    if d['register_num']:
-        encoded_reg_num = urllib.parse.quote(d['register_num'])
-        d['northDataUrl'] = f"https://www.northdata.de/{encoded_reg_num}"
-    else:
-        d['northDataUrl'] = None
 
     return d
 
