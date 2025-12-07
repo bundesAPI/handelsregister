@@ -11,6 +11,7 @@ import re
 import pathlib
 import sys
 from bs4 import BeautifulSoup
+import urllib.parse
 
 # Dictionaries to map arguments to values
 schlagwortOptionen = {
@@ -106,10 +107,13 @@ def parse_result(result):
     d['court'] = cells[1]
     
     # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
-    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+', d['court'])
+    # Also capture suffix letter if present (e.g. HRB 12345 B)
+    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Za-z])?', d['court'])
     d['register_num'] = reg_match.group(0) if reg_match else None
 
-    # Extract district (e.g. "Charlottenburg" from "District court Berlin (Charlottenburg)")
+    # We look for text inside parentheses that is NOT the register number part if that happened to be in parens (unlikely for this format)
+    # The format seems to be: "City District court City (District) ..."
+    # We'll just grab the content of the first parenthesized group that looks like a name.
     dist_match = re.search(r'\(([^)]+)\)', d['court'])
     d['district'] = dist_match.group(1) if dist_match else None
 
@@ -127,10 +131,16 @@ def parse_result(result):
             break
         d['history'].append((cells[i], cells[i+1])) # (name, location)
 
+    if d['register_num']:
+        encoded_reg_num = urllib.parse.quote(d['register_num'])
+        d['northDataUrl'] = f"https://www.northdata.de/{encoded_reg_num}"
+    else:
+        d['northDataUrl'] = None
+
     return d
 
 def pr_company_info(c):
-    for tag in ('name', 'court', 'register_num', 'district', 'state', 'status'):
+    for tag in ('name', 'court', 'register_num', 'northDataUrl', 'district', 'state', 'status'):
         print('%s: %s' % (tag, c.get(tag, '-')))
     print('history:')
     for name, loc in c.get('history'):
