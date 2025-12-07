@@ -64,7 +64,8 @@ class HandelsRegister:
         if self.args.force==False and cachename.exists():
             with open(cachename, "r") as f:
                 html = f.read()
-                print("return cached content for %s" % self.args.schlagwoerter)
+                if not self.args.json:
+                    print("return cached content for %s" % self.args.schlagwoerter)
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
