@@ -1,0 +1,20 @@
+# IDE
+.idea/
+*.xml
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/

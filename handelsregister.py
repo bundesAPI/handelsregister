@@ -5,11 +5,13 @@ You can query, download, automate and much more, without using a web browser.
 """
 
 import argparse
+import tempfile
 import mechanize
 import re
 import pathlib
 import sys
 from bs4 import BeautifulSoup
+import urllib.parse
 
 # Dictionaries to map arguments to values
 schlagwortOptionen = {
@@ -48,15 +50,13 @@ class HandelsRegister:
             (   "Connection", "keep-alive"    ),
         ]
         
-        self.cachedir = pathlib.Path("cache")
+        self.cachedir = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self):
         self.browser.open("https://www.handelsregister.de", timeout=10)
 
     def companyname2cachename(self, companyname):
-        # map a companyname to a filename, that caches the downloaded HTML, so re-running this script touches the
-        # webserver less often.
         return self.cachedir / companyname
 
     def search_company(self):
@@ -64,11 +64,15 @@ class HandelsRegister:
         if self.args.force==False and cachename.exists():
             with open(cachename, "r") as f:
                 html = f.read()
-                print("return cached content for %s" % self.args.schlagwoerter)
+                if not self.args.json:
+                    print("return cached content for %s" % self.args.schlagwoerter)
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            response_search = self.browser.follow_link(text="Advanced search")
+            self.browser.select_form(name="naviForm")
+            self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
+            self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
+            response_search = self.browser.submit()
 
             if self.args.debug == True:
                 print(self.browser.title())
@@ -95,28 +99,49 @@ class HandelsRegister:
         return get_companies_in_searchresults(html)
 
 
+
 def parse_result(result):
     cells = []
     for cellnum, cell in enumerate(result.find_all('td')):
-        #print('[%d]: %s [%s]' % (cellnum, cell.text, cell))
         cells.append(cell.text.strip())
-    #assert cells[7] == 'History'
     d = {}
     d['court'] = cells[1]
+    
+    # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
+    # Also capture suffix letter if present (e.g. HRB 12345 B), but avoid matching start of words (e.g. " Formerly")
+    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', d['court'])
+    d['register_num'] = reg_match.group(0) if reg_match else None
+
     d['name'] = cells[2]
     d['state'] = cells[3]
-    d['status'] = cells[4]
+    d['status'] = cells[4].strip()  # Original value for backward compatibility
+    d['statusCurrent'] = cells[4].strip().upper().replace(' ', '_')  # Transformed value
+
+    # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen) which might be implicit
+    if d['register_num']:
+        suffix_map = {
+            'Berlin': {'HRB': ' B'},
+            'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
+        }
+        reg_type = d['register_num'].split()[0]
+        suffix = suffix_map.get(d['state'], {}).get(reg_type)
+        if suffix and not d['register_num'].endswith(suffix):
+            d['register_num'] += suffix
     d['documents'] = cells[5] # todo: get the document links
     d['history'] = []
     hist_start = 8
-    hist_cnt = (len(cells)-hist_start)/3
+
     for i in range(hist_start, len(cells), 3):
+        if i + 1 >= len(cells):
+            break
+        if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
+            break
         d['history'].append((cells[i], cells[i+1])) # (name, location)
-    #print('d:',d)
+
     return d
 
 def pr_company_info(c):
-    for tag in ('name', 'court', 'state', 'status'):
+    for tag in ('name', 'court', 'register_num', 'district', 'state', 'statusCurrent'):
         print('%s: %s' % (tag, c.get(tag, '-')))
     print('history:')
     for name, loc in c.get('history'):
@@ -125,20 +150,18 @@ def pr_company_info(c):
 def get_companies_in_searchresults(html):
     soup = BeautifulSoup(html, 'html.parser')
     grid = soup.find('table', role='grid')
-    #print('grid: %s', grid)
   
     results = []
     for result in grid.find_all('tr'):
         a = result.get('data-ri')
         if a is not None:
             index = int(a)
-            #print('r[%d] %s' % (index, result))
+
             d = parse_result(result)
             results.append(d)
     return results
 
 def parse_args():
-# Parse arguments
     parser = argparse.ArgumentParser(description='A handelsregister CLI')
     parser.add_argument(
                           "-d",
@@ -166,6 +189,12 @@ def parse_args():
                           choices=["all", "min", "exact"],
                           default="all"
                         )
+    parser.add_argument(
+                          "-j",
+                          "--json",
+                          help="Return response as JSON",
+                          action="store_true"
+                        )
     args = parser.parse_args()
 
 
@@ -179,10 +208,14 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
+    import json
     args = parse_args()
     h = HandelsRegister(args)
     h.open_startpage()
     companies = h.search_company()
     if companies is not None:
-        for c in companies:
-            pr_company_info(c)
+        if args.json:
+            print(json.dumps(companies))
+        else:
+            for c in companies:
+                pr_company_info(c)
