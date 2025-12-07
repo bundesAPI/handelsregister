@@ -56,8 +56,6 @@ class HandelsRegister:
         self.browser.open("https://www.handelsregister.de", timeout=10)
 
     def companyname2cachename(self, companyname):
-        # map a companyname to a filename, that caches the downloaded HTML, so re-running this script touches the
-        # webserver less often.
         return self.cachedir / companyname
 
     def search_company(self):
@@ -103,21 +101,15 @@ class HandelsRegister:
 def parse_result(result):
     cells = []
     for cellnum, cell in enumerate(result.find_all('td')):
-        #print('[%d]: %s [%s]' % (cellnum, cell.text, cell))
         cells.append(cell.text.strip())
-    #assert cells[7] == 'History'
     d = {}
     d['court'] = cells[1]
     
-    # Extract register number (e.g. HRB 12345, VR 6789)
-    # Looking for patterns like HRB, HRA, VR, GnR followed by numbers
+    # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
     reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+', d['court'])
     d['register_num'] = reg_match.group(0) if reg_match else None
 
     # Extract district (e.g. "Charlottenburg" from "District court Berlin (Charlottenburg)")
-    # We look for text inside parentheses that is NOT the register number part if that happened to be in parens (unlikely for this format)
-    # The format seems to be: "City District court City (District) ..."
-    # We'll just grab the content of the first parenthesized group that looks like a name.
     dist_match = re.search(r'\(([^)]+)\)', d['court'])
     d['district'] = dist_match.group(1) if dist_match else None
 
@@ -127,14 +119,14 @@ def parse_result(result):
     d['documents'] = cells[5] # todo: get the document links
     d['history'] = []
     hist_start = 8
-    # hist_cnt = (len(cells)-hist_start)/3
+
     for i in range(hist_start, len(cells), 3):
         if i + 1 >= len(cells):
             break
         if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
             break
         d['history'].append((cells[i], cells[i+1])) # (name, location)
-    #print('d:',d)
+
     return d
 
 def pr_company_info(c):
@@ -147,20 +139,18 @@ def pr_company_info(c):
 def get_companies_in_searchresults(html):
     soup = BeautifulSoup(html, 'html.parser')
     grid = soup.find('table', role='grid')
-    #print('grid: %s', grid)
   
     results = []
     for result in grid.find_all('tr'):
         a = result.get('data-ri')
         if a is not None:
             index = int(a)
-            #print('r[%d] %s' % (index, result))
+
             d = parse_result(result)
             results.append(d)
     return results
 
 def parse_args():
-# Parse arguments
     parser = argparse.ArgumentParser(description='A handelsregister CLI')
     parser.add_argument(
                           "-d",
