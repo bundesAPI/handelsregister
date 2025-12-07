@@ -114,7 +114,8 @@ def parse_result(result):
 
     d['name'] = cells[2]
     d['state'] = cells[3]
-    d['status'] = cells[4].strip().upper().replace(' ', '_')
+    d['status'] = cells[4].strip()  # Original value for backward compatibility
+    d['statusCurrent'] = cells[4].strip().upper().replace(' ', '_')  # Transformed value
 
     # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen) which might be implicit
     if d['register_num']:
