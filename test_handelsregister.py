@@ -8,7 +8,6 @@ def test_parse_search_result():
     assert res == [{
             'court':'Berlin   District court Berlin (Charlottenburg) HRB 44343', 
             'register_num': 'HRB 44343 B',
-            'district': 'Charlottenburg',
             'name':'GASAG AG',
             'state':'Berlin',
             'status':'CURRENTLY_REGISTERED',
