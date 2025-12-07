@@ -111,14 +111,20 @@ def parse_result(result):
     reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', d['court'])
     d['register_num'] = reg_match.group(0) if reg_match else None
 
-    # Special handling for Berlin (Charlottenburg): HRB numbers often imply a "B" suffix in external systems (like North Data)
-    if d['register_num'] and d['register_num'].startswith('HRB') and 'Berlin (Charlottenburg)' in d['court']:
-        if not d['register_num'].endswith(' B'):
-            d['register_num'] += ' B'
-
     d['name'] = cells[2]
     d['state'] = cells[3]
     d['status'] = cells[4].strip().upper().replace(' ', '_')
+
+    # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen) which might be implicit
+    if d['register_num']:
+        suffix_map = {
+            'Berlin': {'HRB': ' B'},
+            'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
+        }
+        reg_type = d['register_num'].split()[0]
+        suffix = suffix_map.get(d['state'], {}).get(reg_type)
+        if suffix and not d['register_num'].endswith(suffix):
+            d['register_num'] += suffix
     d['documents'] = cells[5] # todo: get the document links
     d['history'] = []
     hist_start = 8
