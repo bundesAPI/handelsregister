@@ -28,6 +28,7 @@ from handelsregister import (
     SearchCache,
     SearchOptions,
     get_companies_in_searchresults,
+    get_details,
     parse_result,
     search,
     SUFFIX_MAP,
@@ -671,6 +672,104 @@ class TestHandelsRegisterClass:
         
         with pytest.raises(ValueError, match="benötigt args"):
             hr.search_company()
+    
+    def test_get_company_details_invalid_type(self):
+        """Test that invalid detail_type raises ValueError."""
+        hr = HandelsRegister(debug=False)
+        company = {'name': 'Test', 'register_num': 'HRB 123'}
+        
+        with pytest.raises(ValueError, match="Invalid detail_type"):
+            hr.get_company_details(company, detail_type="INVALID")
+
+
+class TestDetailsParserAD:
+    """Unit tests for DetailsParser AD (Aktueller Abdruck) parsing."""
+    
+    @pytest.fixture
+    def sample_ad_html(self):
+        """Sample HTML from current printout (AD)."""
+        return '''
+        <html>
+        <body>
+        <div class="content">
+            <h1>Aktueller Abdruck</h1>
+            <p>Firma: Test GmbH</p>
+            <p>Rechtsform: Gesellschaft mit beschränkter Haftung</p>
+            <p>Sitz: Berlin</p>
+            <p>Stammkapital: 50.000,00 EUR</p>
+            <p>Gegenstand des Unternehmens: Entwicklung von Software</p>
+            <p>Geschäftsführer: Hans Schmidt (Berlin), einzelvertretungsberechtigt</p>
+        </div>
+        </body>
+        </html>
+        '''
+    
+    def test_parse_ad_basic(self, sample_ad_html):
+        """Test parsing AD content."""
+        base_info = {'name': 'Test GmbH', 'register_num': 'HRB 12345', 
+                     'court': 'AG Berlin', 'state': 'Berlin', 'status': 'aktuell'}
+        details = DetailsParser.parse_ad(sample_ad_html, base_info)
+        
+        assert details.name == "Test GmbH"
+        assert details.legal_form == "Gesellschaft mit beschränkter Haftung"
+    
+    def test_parse_ad_capital(self, sample_ad_html):
+        """Test parsing capital from AD."""
+        details = DetailsParser.parse_ad(sample_ad_html)
+        
+        assert details.capital is not None
+        assert "50.000" in details.capital
+    
+    def test_parse_ad_representatives(self, sample_ad_html):
+        """Test parsing representatives from AD."""
+        details = DetailsParser.parse_ad(sample_ad_html)
+        
+        gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
+        assert gf is not None
+        assert "Schmidt" in gf.name
+
+
+class TestDetailsParserUT:
+    """Unit tests for DetailsParser UT (Unternehmensträger) parsing."""
+    
+    @pytest.fixture
+    def sample_ut_html(self):
+        """Sample HTML from company owners view (UT)."""
+        return '''
+        <html>
+        <body>
+        <div>
+            <h1>Unternehmensträger</h1>
+            <p>Gesellschafter: Holding AG, Anteil: 100%</p>
+            <p>Geschäftsführer: Maria Müller</p>
+        </div>
+        </body>
+        </html>
+        '''
+    
+    def test_parse_ut_owners(self, sample_ut_html):
+        """Test parsing owners from UT."""
+        base_info = {'name': 'Test GmbH', 'register_num': 'HRB 12345',
+                     'court': 'AG Berlin', 'state': 'Berlin', 'status': 'aktuell'}
+        details = DetailsParser.parse_ut(sample_ut_html, base_info)
+        
+        assert len(details.owners) >= 1
+    
+    def test_parse_ut_representatives(self, sample_ut_html):
+        """Test parsing representatives from UT."""
+        details = DetailsParser.parse_ut(sample_ut_html)
+        
+        gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
+        assert gf is not None
+        assert "Müller" in gf.name
+
+
+class TestPublicAPIGetDetails:
+    """Unit tests for the public get_details() function."""
+    
+    def test_get_details_function_exists(self):
+        """Test that get_details function is importable."""
+        assert callable(get_details)
 
 
 # =============================================================================

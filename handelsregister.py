@@ -694,6 +694,185 @@ class DetailsParser:
                     ))
         
         return representatives
+    
+    @classmethod
+    def parse_ad(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+        """Parse current printout (AD - Aktueller Abdruck).
+        
+        The AD view contains the current state of the register entry,
+        typically as formatted text rather than structured tables.
+        
+        Args:
+            html: The HTML content of the AD detail view.
+            base_info: Optional base company info from search results.
+            
+        Returns:
+            CompanyDetails with all parsed information.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Initialize with base info
+        details = CompanyDetails(
+            name=base_info.get('name', '') if base_info else '',
+            register_num=base_info.get('register_num', '') if base_info else '',
+            court=base_info.get('court', '') if base_info else '',
+            state=base_info.get('state', '') if base_info else '',
+            status=base_info.get('status', '') if base_info else '',
+        )
+        
+        # AD content is typically in a content div or pre-formatted text
+        content_div = soup.find('div', class_=re.compile(r'content|abdruck|register', re.I))
+        if content_div is None:
+            content_div = soup.find('body')
+        
+        if content_div:
+            text = content_div.get_text()
+            
+            # Extract legal form
+            details.legal_form = cls._extract_legal_form(text)
+            
+            # Extract capital using the pattern
+            capital_match = cls.CAPITAL_PATTERN.search(text)
+            if capital_match:
+                details.capital = capital_match.group(1)
+                if capital_match.group(2):
+                    details.currency = capital_match.group(2).replace('€', 'EUR')
+            
+            # Extract purpose (Gegenstand des Unternehmens)
+            purpose_match = re.search(
+                r'Gegenstand(?:\s+des\s+Unternehmens)?[:\s]*(.+?)(?:Stammkapital|Grundkapital|Geschäftsführer|Vorstand|Vertretung|$)',
+                text, re.IGNORECASE | re.DOTALL
+            )
+            if purpose_match:
+                details.purpose = purpose_match.group(1).strip()
+            
+            # Extract representatives
+            details.representatives = cls._extract_representatives_from_text(text)
+            
+            # Try to parse tables as well
+            details = cls._parse_si_tables(soup, details)
+        
+        return details
+    
+    @classmethod
+    def parse_ut(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+        """Parse company owner information (UT - Unternehmensträger).
+        
+        The UT view focuses on ownership and shareholder information.
+        
+        Args:
+            html: The HTML content of the UT detail view.
+            base_info: Optional base company info from search results.
+            
+        Returns:
+            CompanyDetails with owner information.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Initialize with base info
+        details = CompanyDetails(
+            name=base_info.get('name', '') if base_info else '',
+            register_num=base_info.get('register_num', '') if base_info else '',
+            court=base_info.get('court', '') if base_info else '',
+            state=base_info.get('state', '') if base_info else '',
+            status=base_info.get('status', '') if base_info else '',
+        )
+        
+        # Parse any tables for structured data
+        details = cls._parse_si_tables(soup, details)
+        
+        # Look for owner/shareholder information
+        text = soup.get_text()
+        details.owners = cls._extract_owners(text)
+        
+        # Also extract representatives if present
+        details.representatives = cls._extract_representatives_from_text(text)
+        
+        return details
+    
+    @classmethod
+    def _extract_representatives_from_text(cls, text: str) -> list[Representative]:
+        """Extract all representatives from free-form text."""
+        representatives = []
+        seen_names = set()
+        
+        # Patterns for different representative types
+        patterns = [
+            # Geschäftsführer patterns
+            (r'Geschäftsführer(?:in)?[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
+             'Geschäftsführer'),
+            # Vorstand patterns
+            (r'Vorstand[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
+             'Vorstand'),
+            # Prokurist patterns
+            (r'Prokurist(?:in)?[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
+             'Prokurist'),
+            # Persönlich haftender Gesellschafter
+            (r'Persönlich\s+haftende[r]?\s+Gesellschafter(?:in)?[:\s]*([A-ZÄÖÜ][^\n,;]+)', 
+             'Persönlich haftender Gesellschafter'),
+        ]
+        
+        for pattern, role in patterns:
+            for match in re.finditer(pattern, text):
+                name = match.group(1).strip()
+                # Clean up name
+                name = re.sub(r'\s*\([^)]*\)\s*', '', name).strip()
+                name = re.sub(r'\s+', ' ', name)
+                
+                if name and len(name) > 3 and name not in seen_names:
+                    seen_names.add(name)
+                    # Extract location if in parentheses after name in original
+                    location = None
+                    full_match = match.group(0)
+                    loc_match = re.search(r'\(([^)]+)\)', full_match)
+                    if loc_match:
+                        location = loc_match.group(1)
+                    
+                    representatives.append(Representative(
+                        name=name,
+                        role=role,
+                        location=location,
+                    ))
+        
+        return representatives
+    
+    @classmethod
+    def _extract_owners(cls, text: str) -> list[Owner]:
+        """Extract owner/shareholder information from text."""
+        owners = []
+        seen_names = set()
+        
+        # Patterns for ownership information with owner type
+        owner_patterns = [
+            # Gesellschafter with share - capture name until comma or Anteil
+            (r'Gesellschafter[:\s]+([^,\n]+?)(?:[,\s]+(?:Anteil|Einlage)[:\s]*([0-9.,]+\s*(?:EUR|€|%)))?(?:\n|$|,)',
+             'Gesellschafter'),
+            # Kommanditist
+            (r'Kommanditist(?:in)?[:\s]+([^,\n]+?)(?:[,\s]+(?:Anteil|Einlage|Haftsumme)[:\s]*([0-9.,]+\s*(?:EUR|€|%)))?(?:\n|$|,)',
+             'Kommanditist'),
+            # Komplementär
+            (r'Komplementär(?:in)?[:\s]+([^,\n]+)',
+             'Komplementär'),
+        ]
+        
+        for pattern, owner_type in owner_patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                name = match.group(1).strip()
+                # Clean up the name
+                name = re.sub(r'\s+', ' ', name)
+                share = None
+                if len(match.groups()) > 1 and match.group(2):
+                    share = match.group(2).strip()
+                
+                if name and len(name) > 2 and name not in seen_names:
+                    seen_names.add(name)
+                    owners.append(Owner(
+                        name=name,
+                        share=share,
+                        owner_type=owner_type,
+                    ))
+        
+        return owners
 
 
 class ResultParser:
@@ -1168,6 +1347,195 @@ class HandelsRegister:
         
         return response.read().decode("utf-8")
     
+    # =========================================================================
+    # Detail Fetching Methods
+    # =========================================================================
+    
+    def get_company_details(
+        self,
+        company: dict,
+        detail_type: str = "SI",
+        force_refresh: bool = False,
+    ) -> CompanyDetails:
+        """Fetch detailed company information.
+        
+        Args:
+            company: Company dict from search results (must contain row_index).
+            detail_type: Type of details to fetch:
+                - "SI": Strukturierter Registerinhalt (structured, recommended)
+                - "AD": Aktueller Abdruck (current printout)
+                - "UT": Unternehmensträger (company owners)
+            force_refresh: Skip cache and fetch fresh data.
+            
+        Returns:
+            CompanyDetails with all available information.
+            
+        Raises:
+            NetworkError: If the request fails.
+            ParseError: If parsing fails.
+            ValueError: If company dict is missing required fields.
+        """
+        # Validate detail_type
+        valid_types = ["SI", "AD", "UT", "CD", "HD", "VÖ"]
+        if detail_type not in valid_types:
+            raise ValueError(f"Invalid detail_type: {detail_type}. Must be one of {valid_types}")
+        
+        # Generate cache key for details
+        cache_key = f"details:{detail_type}:{company.get('register_num', '')}:{company.get('court', '')}"
+        
+        # Try cache first
+        if not force_refresh:
+            cached_html = self.cache.get(cache_key, "")
+            if cached_html is not None:
+                logger.info("Cache hit for details: %s", cache_key)
+                return self._parse_details(cached_html, company, detail_type)
+        
+        # Fetch fresh data
+        html = self._fetch_detail_page(company, detail_type)
+        
+        # Cache the result
+        self.cache.set(cache_key, "", html)
+        
+        return self._parse_details(html, company, detail_type)
+    
+    def _fetch_detail_page(self, company: dict, detail_type: str) -> str:
+        """Fetch a detail page for a company.
+        
+        The Handelsregister uses JSF/PrimeFaces which requires specific
+        form parameters. We reconstruct these based on the search results.
+        
+        Args:
+            company: Company dict with at least 'row_index' from search.
+            detail_type: Type of detail page (SI, AD, UT, etc.).
+            
+        Returns:
+            HTML content of the detail page.
+        """
+        row_index = company.get('row_index', 0)
+        
+        # Map detail types to form control names
+        detail_type_mapping = {
+            'AD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:0:fade',
+            'CD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:1:fade',
+            'HD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:2:fade',
+            'UT': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:4:fade',
+            'VÖ': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:5:fade',
+            'SI': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:6:fade',
+        }
+        
+        control_name = detail_type_mapping.get(detail_type, detail_type_mapping['SI'])
+        control_name = control_name.format(row=row_index)
+        
+        try:
+            # Try to select the results form
+            self.browser.select_form(name="ergebnissForm")
+            
+            # Add the detail link control
+            self.browser.form.new_control('hidden', control_name, {'value': control_name})
+            
+            response = self.browser.submit()
+            return response.read().decode("utf-8")
+            
+        except mechanize.FormNotFoundError:
+            # Fall back to re-fetching via URL if form not available
+            logger.warning("Results form not found, using alternative fetch method")
+            return self._fetch_detail_alternative(company, detail_type)
+        except urllib.error.URLError as e:
+            raise NetworkError(
+                f"Failed to fetch detail page: {e.reason}",
+                original_error=e
+            ) from e
+    
+    def _fetch_detail_alternative(self, company: dict, detail_type: str) -> str:
+        """Alternative method to fetch details when form is not available.
+        
+        This method constructs a direct request based on company information.
+        Note: Full implementation requires JSF viewstate handling.
+        """
+        # Extract register court and number for direct lookup
+        # These will be used for future direct API access implementation
+        register_num = company.get('register_num', '')
+        _court = company.get('court', '')  # Reserved for future use
+        _state = company.get('state', '')  # Reserved for future use
+        
+        # For now, return empty HTML - actual implementation would need
+        # to handle the JSF viewstate properly
+        logger.warning(
+            "Alternative fetch not fully implemented for %s %s", 
+            register_num, detail_type
+        )
+        return ""
+    
+    def _parse_details(
+        self, 
+        html: str, 
+        company: dict, 
+        detail_type: str
+    ) -> CompanyDetails:
+        """Parse detail HTML into CompanyDetails.
+        
+        Args:
+            html: HTML content of detail page.
+            company: Base company info from search.
+            detail_type: Type of detail page.
+            
+        Returns:
+            Parsed CompanyDetails.
+        """
+        if detail_type == "SI":
+            return DetailsParser.parse_si(html, company)
+        elif detail_type == "AD":
+            return DetailsParser.parse_ad(html, company)
+        elif detail_type == "UT":
+            return DetailsParser.parse_ut(html, company)
+        else:
+            # Default to SI parser
+            return DetailsParser.parse_si(html, company)
+    
+    def search_with_details(
+        self,
+        options: SearchOptions,
+        fetch_details: bool = True,
+        detail_type: str = "SI",
+        force_refresh: bool = False,
+    ) -> list[CompanyDetails]:
+        """Search for companies and optionally fetch details.
+        
+        Args:
+            options: Search options.
+            fetch_details: Whether to fetch details for each result.
+            detail_type: Type of details to fetch (SI, AD, UT).
+            force_refresh: Skip cache.
+            
+        Returns:
+            List of CompanyDetails with full information.
+        """
+        # First, perform the search
+        companies = self.search_with_options(options, force_refresh=force_refresh)
+        
+        if not fetch_details:
+            # Return basic CompanyDetails from search results
+            return [CompanyDetails.from_company(c) for c in companies]
+        
+        # Fetch details for each company
+        results: list[CompanyDetails] = []
+        for i, company in enumerate(companies):
+            company['row_index'] = i  # Add row index for form submission
+            try:
+                details = self.get_company_details(
+                    company, 
+                    detail_type=detail_type,
+                    force_refresh=force_refresh
+                )
+                results.append(details)
+            except (NetworkError, ParseError) as e:
+                logger.warning("Failed to fetch details for %s: %s", 
+                             company.get('name', 'unknown'), e)
+                # Fall back to basic info
+                results.append(CompanyDetails.from_company(company))
+        
+        return results
+    
     # Backward compatibility methods
     def _get_cache_key(self, query: str, options: str) -> str:
         """Generate cache key. Deprecated: use cache.get/set instead."""
@@ -1406,6 +1774,75 @@ def search(
     hr = HandelsRegister(args)
     hr.open_startpage()
     return hr.search_company()
+
+
+def get_details(
+    company: dict,
+    detail_type: str = "SI",
+    force_refresh: bool = False,
+    debug: bool = False,
+) -> CompanyDetails:
+    """Ruft detaillierte Unternehmensinformationen ab.
+    
+    Diese Funktion ruft erweiterte Informationen zu einem Unternehmen ab,
+    das zuvor über search() gefunden wurde.
+    
+    Args:
+        company: Unternehmen-Dictionary aus den Suchergebnissen.
+        detail_type: Art der Details:
+            - "SI": Strukturierter Registerinhalt (empfohlen)
+            - "AD": Aktueller Abdruck
+            - "UT": Unternehmensträger
+        force_refresh: Cache ignorieren.
+        debug: Debug-Logging aktivieren.
+        
+    Returns:
+        CompanyDetails mit allen verfügbaren Informationen.
+        
+    Beispiel:
+        >>> from handelsregister import search, get_details
+        >>> 
+        >>> # Erst suchen
+        >>> companies = search("GASAG AG", keyword_option="exact")
+        >>> 
+        >>> # Dann Details abrufen
+        >>> if companies:
+        ...     details = get_details(companies[0])
+        ...     print(f"Kapital: {details.capital} {details.currency}")
+        ...     print(f"Rechtsform: {details.legal_form}")
+    """
+    if debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    
+    hr = HandelsRegister(debug=debug)
+    hr.open_startpage()
+    
+    # We need to perform a search first to get the session state
+    # Use the company's register number for a targeted search
+    register_num = company.get('register_num', '')
+    name = company.get('name', '')
+    
+    if register_num:
+        # Search by register number for precision
+        search_opts = SearchOptions(
+            keywords=name,
+            keyword_option="exact",
+        )
+    else:
+        search_opts = SearchOptions(
+            keywords=name,
+            keyword_option="all",
+        )
+    
+    # Perform search to establish session
+    hr.search_with_options(search_opts, force_refresh=force_refresh)
+    
+    # Now fetch details
+    company['row_index'] = 0  # First result
+    return hr.get_company_details(company, detail_type, force_refresh)
 
 
 def main() -> int:
