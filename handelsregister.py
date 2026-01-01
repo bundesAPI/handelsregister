@@ -2,6 +2,12 @@
 """
 bundesAPI/handelsregister is the command-line interface for the shared register of companies portal for the German federal states.
 You can query, download, automate and much more, without using a web browser.
+
+Architecture:
+    - SearchCache: Handles caching of search results with TTL expiration
+    - ResultParser: Parses HTML search results into structured data
+    - HandelsRegister: Browser automation for the Handelsregister website
+    - CLI: Command-line interface (main, parse_args)
 """
 
 from __future__ import annotations
@@ -29,11 +35,36 @@ from bs4.element import Tag
 # Configure module logger
 logger = logging.getLogger(__name__)
 
-# Cache configuration
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
 DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL
+BASE_URL: str = "https://www.handelsregister.de"
+REQUEST_TIMEOUT: int = 10
+
+# Mapping of keyword option names to form values
+KEYWORD_OPTIONS: dict[str, int] = {
+    "all": 1,
+    "min": 2,
+    "exact": 3
+}
+
+# Mapping of states to register type suffixes
+SUFFIX_MAP: dict[str, dict[str, str]] = {
+    'Berlin': {'HRB': ' B'},
+    'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
+}
+
+# For backward compatibility
+schlagwortOptionen = KEYWORD_OPTIONS
 
 
-# Custom Exceptions
+# =============================================================================
+# Exceptions
+# =============================================================================
+
 class HandelsregisterError(Exception):
     """Base exception for all Handelsregister errors."""
     pass
@@ -63,13 +94,9 @@ class CacheError(HandelsregisterError):
     pass
 
 
-# Dictionaries to map arguments to values
-schlagwortOptionen: dict[str, int] = {
-    "all": 1,
-    "min": 2,
-    "exact": 3
-}
-
+# =============================================================================
+# Data Models
+# =============================================================================
 
 @dataclass
 class CacheEntry:
@@ -100,7 +127,7 @@ class CacheEntry:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'CacheEntry':
+    def from_dict(cls, data: dict) -> CacheEntry:
         """Create a CacheEntry from a dictionary."""
         return cls(
             query=data['query'],
@@ -142,93 +169,54 @@ class Company:
             'history': [(h.name, h.location) for h in self.history]
         }
 
-class HandelsRegister:
-    def __init__(self, args: argparse.Namespace) -> None:
-        self.args = args
-        self.browser: mechanize.Browser = mechanize.Browser()
 
-        self.browser.set_debug_http(args.debug)
-        self.browser.set_debug_responses(args.debug)
-        # self.browser.set_debug_redirects(True)
+# =============================================================================
+# Cache Layer
+# =============================================================================
 
-        self.browser.set_handle_robots(False)
-        self.browser.set_handle_equiv(True)
-        self.browser.set_handle_gzip(True)
-        self.browser.set_handle_refresh(False)
-        self.browser.set_handle_redirect(True)
-        self.browser.set_handle_referer(True)
-
-        self.browser.addheaders = [
-            (
-                "User-Agent",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
-            ),
-            (   "Accept-Language", "en-GB,en;q=0.9"   ),
-            (   "Accept-Encoding", "gzip, deflate, br"    ),
-            (
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            ),
-            (   "Connection", "keep-alive"    ),
-        ]
-        
-        self.cachedir: pathlib.Path = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
-        self.cachedir.mkdir(parents=True, exist_ok=True)
-
-    def open_startpage(self) -> None:
-        """Open the Handelsregister start page.
-        
-        Raises:
-            NetworkError: If the connection fails or times out.
-        """
-        try:
-            self.browser.open("https://www.handelsregister.de", timeout=10)
-        except urllib.error.URLError as e:
-            raise NetworkError(
-                f"Failed to connect to handelsregister.de: {e.reason}",
-                original_error=e
-            ) from e
-        except mechanize.BrowserStateError as e:
-            raise NetworkError(
-                f"Browser state error: {e}",
-                original_error=e
-            ) from e
-
-    def _get_cache_key(self, query: str, options: str) -> str:
-        """Generate a safe cache key by hashing the query parameters.
+class SearchCache:
+    """Handles caching of search results with TTL expiration.
+    
+    Cache files are stored as JSON in a temporary directory with SHA-256
+    hashed filenames to prevent path traversal attacks.
+    """
+    
+    def __init__(
+        self, 
+        cache_dir: Optional[pathlib.Path] = None,
+        ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
+    ) -> None:
+        """Initialize the cache.
         
         Args:
-            query: The search query string.
-            options: The search options.
-            
-        Returns:
-            A SHA-256 hash of the query parameters.
+            cache_dir: Directory to store cache files. Defaults to temp directory.
+            ttl_seconds: Time-to-live for cache entries in seconds.
         """
+        self.ttl_seconds = ttl_seconds
+        self.cache_dir = cache_dir or (
+            pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
+        )
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _get_cache_key(self, query: str, options: str) -> str:
+        """Generate a safe cache key by hashing the query parameters."""
         key_data = f"{query}|{options}"
         return hashlib.sha256(key_data.encode('utf-8')).hexdigest()
     
     def _get_cache_path(self, query: str, options: str) -> pathlib.Path:
-        """Get the cache file path for a query.
-        
-        Args:
-            query: The search query string.
-            options: The search options.
-            
-        Returns:
-            Path to the cache file.
-        """
+        """Get the cache file path for a query."""
         cache_key = self._get_cache_key(query, options)
-        return self.cachedir / f"{cache_key}.json"
+        return self.cache_dir / f"{cache_key}.json"
     
-    def _load_from_cache(self, query: str, options: str) -> Optional[CacheEntry]:
-        """Load a cache entry if it exists and is not expired.
+    def get(self, query: str, options: str) -> Optional[str]:
+        """Get cached HTML content if available and not expired.
         
         Args:
             query: The search query string.
             options: The search options.
             
         Returns:
-            CacheEntry if valid cache exists, None otherwise.
+            Cached HTML content, or None if not available.
         """
         cache_path = self._get_cache_path(query, options)
         
@@ -240,25 +228,18 @@ class HandelsRegister:
                 data = json_module.load(f)
                 entry = CacheEntry.from_dict(data)
                 
-                if entry.is_expired():
-                    # Delete expired cache file
-                    try:
-                        cache_path.unlink()
-                    except OSError:
-                        pass
+                if entry.is_expired(self.ttl_seconds):
+                    self._delete_file(cache_path)
                     return None
                     
-                return entry
+                return entry.html
+                
         except (OSError, json_module.JSONDecodeError, KeyError) as e:
-            # Invalid cache file - delete it
             logger.warning("Invalid cache file, removing: %s", e)
-            try:
-                cache_path.unlink()
-            except OSError:
-                pass
+            self._delete_file(cache_path)
             return None
     
-    def _save_to_cache(self, query: str, options: str, html: str) -> None:
+    def set(self, query: str, options: str, html: str) -> None:
         """Save HTML content to cache.
         
         Args:
@@ -279,7 +260,240 @@ class HandelsRegister:
                 json_module.dump(entry.to_dict(), f)
         except OSError as e:
             logger.warning("Failed to write cache file: %s", e)
+    
+    def _delete_file(self, path: pathlib.Path) -> None:
+        """Safely delete a cache file."""
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
+
+# =============================================================================
+# Parser Layer
+# =============================================================================
+
+class ResultParser:
+    """Parses HTML search results into structured company data."""
+    
+    @staticmethod
+    def parse_search_results(html: str) -> list[dict]:
+        """Extract company records from search results HTML.
+        
+        Args:
+            html: The HTML content of the search results page.
+            
+        Returns:
+            A list of dictionaries, each containing company information.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        grid = soup.find('table', role='grid')
+        
+        results: list[dict] = []
+        if grid is None:
+            return results
+            
+        for row in grid.find_all('tr'):
+            data_ri = row.get('data-ri')
+            if data_ri is not None:
+                company_data = ResultParser.parse_result_row(row)
+                results.append(company_data)
+                
+        return results
+    
+    @staticmethod
+    def parse_result_row(row: Tag) -> dict:
+        """Parse a single search result row into a company dictionary.
+        
+        Args:
+            row: A BeautifulSoup Tag representing a table row.
+            
+        Returns:
+            A dictionary containing company information.
+            
+        Raises:
+            ParseError: If the result row has unexpected structure.
+        """
+        cells: list[str] = [cell.text.strip() for cell in row.find_all('td')]
+        
+        if len(cells) < 6:
+            raise ParseError(
+                f"Expected at least 6 cells in result row, got {len(cells)}",
+                html_snippet=str(row)[:500]
+            )
+        
+        court = cells[1]
+        state = cells[3]
+        status = cells[4].strip()
+        
+        # Extract register number
+        register_num = ResultParser._extract_register_number(court, state)
+        
+        # Parse history entries
+        history = ResultParser._parse_history(cells)
+        
+        return {
+            'court': court,
+            'register_num': register_num,
+            'name': cells[2],
+            'state': state,
+            'status': status,
+            'statusCurrent': status.upper().replace(' ', '_'),
+            'documents': cells[5],
+            'history': history
+        }
+    
+    @staticmethod
+    def _extract_register_number(court: str, state: str) -> Optional[str]:
+        """Extract and normalize the register number from court string.
+        
+        Args:
+            court: The court field containing the register number.
+            state: The state, used to add appropriate suffix.
+            
+        Returns:
+            Normalized register number, or None if not found.
+        """
+        # Extract register number: HRB, HRA, VR, GnR followed by numbers
+        # Also capture suffix letter if present (e.g. HRB 12345 B)
+        reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', court)
+        
+        if not reg_match:
+            return None
+            
+        register_num = reg_match.group(0)
+        
+        # Add state-specific suffix if needed
+        reg_type = register_num.split()[0]
+        suffix = SUFFIX_MAP.get(state, {}).get(reg_type)
+        if suffix and not register_num.endswith(suffix):
+            register_num += suffix
+            
+        return register_num
+    
+    @staticmethod
+    def _parse_history(cells: list[str]) -> list[tuple[str, str]]:
+        """Parse history entries from cell data.
+        
+        Args:
+            cells: List of cell text content.
+            
+        Returns:
+            List of (name, location) tuples.
+        """
+        history: list[tuple[str, str]] = []
+        hist_start = 8
+        
+        for i in range(hist_start, len(cells), 3):
+            if i + 1 >= len(cells):
+                break
+            if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
+                break
+            history.append((cells[i], cells[i + 1]))
+            
+        return history
+
+
+# Backward-compatible function aliases
+def parse_result(result: Tag) -> dict:
+    """Parse a single search result row into a company dictionary.
+    
+    Deprecated: Use ResultParser.parse_result_row() instead.
+    """
+    return ResultParser.parse_result_row(result)
+
+
+def get_companies_in_searchresults(html: str) -> list[dict]:
+    """Extract company records from search results HTML.
+    
+    Deprecated: Use ResultParser.parse_search_results() instead.
+    """
+    return ResultParser.parse_search_results(html)
+
+
+# =============================================================================
+# Browser Layer
+# =============================================================================
+
+class HandelsRegister:
+    """Browser automation for searching the Handelsregister website.
+    
+    This class handles all interaction with the Handelsregister website,
+    including navigation, form submission, and result retrieval.
+    """
+    
+    def __init__(
+        self, 
+        args: argparse.Namespace,
+        cache: Optional[SearchCache] = None
+    ) -> None:
+        """Initialize the HandelsRegister client.
+        
+        Args:
+            args: Command-line arguments namespace.
+            cache: Optional cache instance. Created automatically if not provided.
+        """
+        self.args = args
+        self.cache = cache or SearchCache()
+        self.browser = self._create_browser(debug=args.debug)
+    
+    def _create_browser(self, debug: bool = False) -> mechanize.Browser:
+        """Create and configure a mechanize browser instance.
+        
+        Args:
+            debug: Enable debug output for HTTP requests.
+            
+        Returns:
+            Configured Browser instance.
+        """
+        browser = mechanize.Browser()
+        
+        browser.set_debug_http(debug)
+        browser.set_debug_responses(debug)
+        
+        browser.set_handle_robots(False)
+        browser.set_handle_equiv(True)
+        browser.set_handle_gzip(True)
+        browser.set_handle_refresh(False)
+        browser.set_handle_redirect(True)
+        browser.set_handle_referer(True)
+        
+        browser.addheaders = [
+            ("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15"),
+            ("Accept-Language", "en-GB,en;q=0.9"),
+            ("Accept-Encoding", "gzip, deflate, br"),
+            ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
+            ("Connection", "keep-alive"),
+        ]
+        
+        return browser
+    
+    # Backward compatibility: expose cachedir
+    @property
+    def cachedir(self) -> pathlib.Path:
+        """Get the cache directory path."""
+        return self.cache.cache_dir
+    
+    def open_startpage(self) -> None:
+        """Open the Handelsregister start page.
+        
+        Raises:
+            NetworkError: If the connection fails or times out.
+        """
+        try:
+            self.browser.open(BASE_URL, timeout=REQUEST_TIMEOUT)
+        except urllib.error.URLError as e:
+            raise NetworkError(
+                f"Failed to connect to handelsregister.de: {e.reason}",
+                original_error=e
+            ) from e
+        except mechanize.BrowserStateError as e:
+            raise NetworkError(
+                f"Browser state error: {e}",
+                original_error=e
+            ) from e
+    
     def search_company(self) -> list[dict]:
         """Search for companies matching the provided keywords.
         
@@ -289,7 +503,6 @@ class HandelsRegister:
         Raises:
             NetworkError: If network requests fail.
             FormError: If form selection or submission fails.
-            CacheError: If cache read/write operations fail.
             ParseError: If HTML parsing fails.
         """
         query = self.args.schlagwoerter
@@ -297,123 +510,131 @@ class HandelsRegister:
         
         # Try to load from cache
         if not self.args.force:
-            cache_entry = self._load_from_cache(query, options)
-            if cache_entry is not None:
+            cached_html = self.cache.get(query, options)
+            if cached_html is not None:
                 logger.info("Returning cached content for query: %s", query)
-                return get_companies_in_searchresults(cache_entry.html)
+                return ResultParser.parse_search_results(cached_html)
         
-        # Fetch fresh data
-        # TODO implement token bucket to abide by rate limit
-        # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
+        # Fetch fresh data from website
+        html = self._fetch_search_results(query, options)
+        
+        # Save to cache
+        self.cache.set(query, options, html)
+        
+        return ResultParser.parse_search_results(html)
+    
+    def _fetch_search_results(self, query: str, options: str) -> str:
+        """Fetch search results from the website.
+        
+        Args:
+            query: Search keywords.
+            options: Search option (all, min, exact).
+            
+        Returns:
+            HTML content of search results page.
+            
+        Raises:
+            NetworkError: If network requests fail.
+            FormError: If form selection or submission fails.
+        """
+        # Navigate to extended search
+        self._navigate_to_search()
+        
+        # Submit search form
+        return self._submit_search(query, options)
+    
+    def _navigate_to_search(self) -> None:
+        """Navigate from start page to extended search form.
+        
+        Raises:
+            FormError: If navigation form is not found.
+            NetworkError: If form submission fails.
+        """
         try:
             self.browser.select_form(name="naviForm")
         except mechanize.FormNotFoundError as e:
-            raise FormError(f"Navigation form not found. The website structure may have changed: {e}") from e
+            raise FormError(
+                f"Navigation form not found. The website structure may have changed: {e}"
+            ) from e
         
-        self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
+        self.browser.form.new_control(
+            'hidden', 
+            'naviForm:erweiterteSucheLink', 
+            {'value': 'naviForm:erweiterteSucheLink'}
+        )
         self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
         
         try:
             self.browser.submit()
         except urllib.error.URLError as e:
-            raise NetworkError(f"Failed to submit navigation form: {e.reason}", original_error=e) from e
-
+            raise NetworkError(
+                f"Failed to submit navigation form: {e.reason}", 
+                original_error=e
+            ) from e
+        
         logger.debug("Page title after navigation: %s", self.browser.title())
-
+    
+    def _submit_search(self, query: str, options: str) -> str:
+        """Submit the search form and return results HTML.
+        
+        Args:
+            query: Search keywords.
+            options: Search option (all, min, exact).
+            
+        Returns:
+            HTML content of search results page.
+            
+        Raises:
+            FormError: If search form is not found.
+            NetworkError: If form submission fails.
+        """
         try:
             self.browser.select_form(name="form")
         except mechanize.FormNotFoundError as e:
-            raise FormError(f"Search form not found. The website structure may have changed: {e}") from e
-
+            raise FormError(
+                f"Search form not found. The website structure may have changed: {e}"
+            ) from e
+        
         self.browser["form:schlagwoerter"] = query
-        so_id = schlagwortOptionen.get(options)
-
-        self.browser["form:schlagwortOptionen"] = [str(so_id)]
-
+        option_id = KEYWORD_OPTIONS.get(options)
+        self.browser["form:schlagwortOptionen"] = [str(option_id)]
+        
         try:
-            response_result = self.browser.submit()
+            response = self.browser.submit()
         except urllib.error.URLError as e:
-            raise NetworkError(f"Failed to submit search form: {e.reason}", original_error=e) from e
-
+            raise NetworkError(
+                f"Failed to submit search form: {e.reason}", 
+                original_error=e
+            ) from e
+        
         logger.debug("Page title after search: %s", self.browser.title())
-
-        html = response_result.read().decode("utf-8")
         
-        # Save to cache
-        self._save_to_cache(query, options, html)
-
-        # TODO catch the situation if there's more than one company?
-        # TODO get all documents attached to the exact company
-        # TODO parse useful information out of the PDFs
-        
-        return get_companies_in_searchresults(html)
-
-
-# Mapping of states to register type suffixes
-SUFFIX_MAP: dict[str, dict[str, str]] = {
-    'Berlin': {'HRB': ' B'},
-    'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
-}
-
-
-def parse_result(result: Tag) -> dict:
-    """Parse a single search result row into a company dictionary.
+        return response.read().decode("utf-8")
     
-    Args:
-        result: A BeautifulSoup Tag representing a table row.
-        
-    Returns:
-        A dictionary containing company information.
-        
-    Raises:
-        ParseError: If the result row has unexpected structure.
-    """
-    cells: list[str] = [cell.text.strip() for cell in result.find_all('td')]
+    # Backward compatibility methods
+    def _get_cache_key(self, query: str, options: str) -> str:
+        """Generate cache key. Deprecated: use cache.get/set instead."""
+        return self.cache._get_cache_key(query, options)
     
-    if len(cells) < 6:
-        raise ParseError(
-            f"Expected at least 6 cells in result row, got {len(cells)}",
-            html_snippet=str(result)[:500]
-        )
+    def _get_cache_path(self, query: str, options: str) -> pathlib.Path:
+        """Get cache path. Deprecated: use cache.get/set instead."""
+        return self.cache._get_cache_path(query, options)
     
-    court = cells[1]
+    def _load_from_cache(self, query: str, options: str) -> Optional[CacheEntry]:
+        """Load from cache. Deprecated: use cache.get instead."""
+        html = self.cache.get(query, options)
+        if html is None:
+            return None
+        return CacheEntry(query=query, options=options, timestamp=time.time(), html=html)
     
-    # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
-    # Also capture suffix letter if present (e.g. HRB 12345 B), but avoid matching start of words (e.g. " Formerly")
-    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', court)
-    register_num: Optional[str] = reg_match.group(0) if reg_match else None
+    def _save_to_cache(self, query: str, options: str, html: str) -> None:
+        """Save to cache. Deprecated: use cache.set instead."""
+        self.cache.set(query, options, html)
 
-    state = cells[3]
-    status = cells[4].strip()
-    
-    # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen)
-    if register_num:
-        reg_type = register_num.split()[0]
-        suffix = SUFFIX_MAP.get(state, {}).get(reg_type)
-        if suffix and not register_num.endswith(suffix):
-            register_num += suffix
-    
-    # Parse history entries
-    history: list[tuple[str, str]] = []
-    hist_start = 8
-    for i in range(hist_start, len(cells), 3):
-        if i + 1 >= len(cells):
-            break
-        if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
-            break
-        history.append((cells[i], cells[i + 1]))
-    
-    return {
-        'court': court,
-        'register_num': register_num,
-        'name': cells[2],
-        'state': state,
-        'status': status,
-        'statusCurrent': status.upper().replace(' ', '_'),
-        'documents': cells[5],
-        'history': history
-    }
 
+# =============================================================================
+# CLI Layer
+# =============================================================================
 
 def pr_company_info(c: dict) -> None:
     """Print company information to stdout.
@@ -428,66 +649,54 @@ def pr_company_info(c: dict) -> None:
         print(name, loc)
 
 
-def get_companies_in_searchresults(html: str) -> list[dict]:
-    """Extract company records from search results HTML.
-    
-    Args:
-        html: The HTML content of the search results page.
-        
-    Returns:
-        A list of dictionaries, each containing company information.
-    """
-    soup = BeautifulSoup(html, 'html.parser')
-    grid = soup.find('table', role='grid')
-    
-    results: list[dict] = []
-    if grid is None:
-        return results
-        
-    for result in grid.find_all('tr'):
-        data_ri = result.get('data-ri')
-        if data_ri is not None:
-            d = parse_result(result)
-            results.append(d)
-    return results
-
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='A handelsregister CLI')
+    """Parse command-line arguments.
+    
+    Returns:
+        Parsed arguments namespace.
+    """
+    parser = argparse.ArgumentParser(
+        description='A handelsregister CLI',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s -s "Deutsche Bahn" -so all
+  %(prog)s -s "GASAG AG" -so exact --json
+  %(prog)s -s "Munich" -f --debug
+        """
+    )
+    
     parser.add_argument(
-                          "-d",
-                          "--debug",
-                          help="Enable debug mode and activate logging",
-                          action="store_true"
-                        )
+        "-d", "--debug",
+        help="Enable debug mode and activate logging",
+        action="store_true"
+    )
     parser.add_argument(
-                          "-f",
-                          "--force",
-                          help="Force a fresh pull and skip the cache",
-                          action="store_true"
-                        )
+        "-f", "--force",
+        help="Force a fresh pull and skip the cache",
+        action="store_true"
+    )
     parser.add_argument(
-                          "-s",
-                          "--schlagwoerter",
-                          help="Search for the provided keywords",
-                          required=True,
-                          default="Gasag AG" # TODO replace default with a generic search term
-                        )
+        "-s", "--schlagwoerter",
+        help="Search for the provided keywords",
+        required=True,
+        metavar="KEYWORDS"
+    )
     parser.add_argument(
-                          "-so",
-                          "--schlagwortOptionen",
-                          help="Keyword options: all=contain all keywords; min=contain at least one keyword; exact=contain the exact company name.",
-                          choices=["all", "min", "exact"],
-                          default="all"
-                        )
+        "-so", "--schlagwortOptionen",
+        help="Keyword options: all=contain all keywords; min=contain at least one; exact=exact name",
+        choices=["all", "min", "exact"],
+        default="all",
+        metavar="OPTION"
+    )
     parser.add_argument(
-                          "-j",
-                          "--json",
-                          help="Return response as JSON",
-                          action="store_true"
-                        )
+        "-j", "--json",
+        help="Return response as JSON",
+        action="store_true"
+    )
+    
     args = parser.parse_args()
-
+    
     # Configure logging based on debug flag
     if args.debug:
         logging.basicConfig(
@@ -495,7 +704,6 @@ def parse_args() -> argparse.Namespace:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             stream=sys.stdout
         )
-        # Also enable mechanize debug logging
         mechanize_logger = logging.getLogger("mechanize")
         mechanize_logger.setLevel(logging.DEBUG)
     else:
@@ -503,8 +711,9 @@ def parse_args() -> argparse.Namespace:
             level=logging.WARNING,
             format='%(levelname)s: %(message)s'
         )
-
+    
     return args
+
 
 def main() -> int:
     """Main entry point for the CLI.
@@ -516,11 +725,11 @@ def main() -> int:
     args = parse_args()
     
     try:
-        h = HandelsRegister(args)
-        h.open_startpage()
-        companies = h.search_company()
+        hr = HandelsRegister(args)
+        hr.open_startpage()
+        companies = hr.search_company()
         
-        if companies is not None:
+        if companies:
             if args.json:
                 print(json.dumps(companies))
             else:

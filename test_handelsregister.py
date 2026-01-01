@@ -19,6 +19,8 @@ from handelsregister import (
     HandelsRegister,
     HistoryEntry,
     ParseError,
+    ResultParser,
+    SearchCache,
     get_companies_in_searchresults,
     parse_result,
     SUFFIX_MAP,
@@ -170,32 +172,49 @@ class TestDataClasses:
 class TestCache:
     """Unit tests for caching functionality."""
 
-    def test_cache_key_generation(self, mock_args, temp_cache_dir):
+    def test_cache_key_generation(self, temp_cache_dir):
         """Test that cache keys are deterministic."""
-        with patch.object(HandelsRegister, '__init__', lambda self, args: None):
-            hr = HandelsRegister.__new__(HandelsRegister)
-            hr.args = mock_args
-            hr.cachedir = temp_cache_dir
-            
-            key1 = hr._get_cache_key("Test", "all")
-            key2 = hr._get_cache_key("Test", "all")
-            key3 = hr._get_cache_key("Test", "exact")
-            
-            assert key1 == key2  # Same inputs = same key
-            assert key1 != key3  # Different options = different key
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        key1 = cache._get_cache_key("Test", "all")
+        key2 = cache._get_cache_key("Test", "all")
+        key3 = cache._get_cache_key("Test", "exact")
+        
+        assert key1 == key2  # Same inputs = same key
+        assert key1 != key3  # Different options = different key
 
-    def test_cache_key_is_hash(self, mock_args, temp_cache_dir):
+    def test_cache_key_is_hash(self, temp_cache_dir):
         """Test that cache keys are valid hex hashes."""
-        with patch.object(HandelsRegister, '__init__', lambda self, args: None):
-            hr = HandelsRegister.__new__(HandelsRegister)
-            hr.args = mock_args
-            hr.cachedir = temp_cache_dir
-            
-            key = hr._get_cache_key("Company with spaces / special chars!", "all")
-            
-            # Should be a 64-character hex string (SHA-256)
-            assert len(key) == 64
-            assert all(c in '0123456789abcdef' for c in key)
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        key = cache._get_cache_key("Company with spaces / special chars!", "all")
+        
+        # Should be a 64-character hex string (SHA-256)
+        assert len(key) == 64
+        assert all(c in '0123456789abcdef' for c in key)
+    
+    def test_cache_get_set(self, temp_cache_dir):
+        """Test cache get/set operations."""
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        # Initially empty
+        assert cache.get("test", "all") is None
+        
+        # Set value
+        cache.set("test", "all", "<html>cached</html>")
+        
+        # Get returns the value
+        assert cache.get("test", "all") == "<html>cached</html>"
+    
+    def test_cache_ttl_expiration(self, temp_cache_dir):
+        """Test that expired cache entries are not returned."""
+        cache = SearchCache(cache_dir=temp_cache_dir, ttl_seconds=0)
+        
+        cache.set("test", "all", "<html>cached</html>")
+        time.sleep(0.1)  # Wait for expiration
+        
+        # Expired entry should return None
+        assert cache.get("test", "all") is None
 
 
 # =============================================================================
