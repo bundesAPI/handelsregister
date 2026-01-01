@@ -7,7 +7,10 @@ You can query, download, automate and much more, without using a web browser.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json as json_module
 import tempfile
+import time
 import mechanize
 import re
 import pathlib
@@ -18,6 +21,9 @@ from typing import Optional
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 import urllib.parse
+
+# Cache configuration
+DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL
 
 
 # Custom Exceptions
@@ -56,6 +62,45 @@ schlagwortOptionen: dict[str, int] = {
     "min": 2,
     "exact": 3
 }
+
+
+@dataclass
+class CacheEntry:
+    """Represents a cached search result with metadata."""
+    query: str
+    options: str
+    timestamp: float
+    html: str
+    
+    def is_expired(self, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS) -> bool:
+        """Check if the cache entry has expired.
+        
+        Args:
+            ttl_seconds: Time-to-live in seconds.
+            
+        Returns:
+            True if the entry is expired, False otherwise.
+        """
+        return (time.time() - self.timestamp) > ttl_seconds
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'query': self.query,
+            'options': self.options,
+            'timestamp': self.timestamp,
+            'html': self.html
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'CacheEntry':
+        """Create a CacheEntry from a dictionary."""
+        return cls(
+            query=data['query'],
+            options=data['options'],
+            timestamp=data['timestamp'],
+            html=data['html']
+        )
 
 
 @dataclass
@@ -142,8 +187,93 @@ class HandelsRegister:
                 original_error=e
             ) from e
 
-    def companyname2cachename(self, companyname: str) -> pathlib.Path:
-        return self.cachedir / companyname
+    def _get_cache_key(self, query: str, options: str) -> str:
+        """Generate a safe cache key by hashing the query parameters.
+        
+        Args:
+            query: The search query string.
+            options: The search options.
+            
+        Returns:
+            A SHA-256 hash of the query parameters.
+        """
+        key_data = f"{query}|{options}"
+        return hashlib.sha256(key_data.encode('utf-8')).hexdigest()
+    
+    def _get_cache_path(self, query: str, options: str) -> pathlib.Path:
+        """Get the cache file path for a query.
+        
+        Args:
+            query: The search query string.
+            options: The search options.
+            
+        Returns:
+            Path to the cache file.
+        """
+        cache_key = self._get_cache_key(query, options)
+        return self.cachedir / f"{cache_key}.json"
+    
+    def _load_from_cache(self, query: str, options: str) -> Optional[CacheEntry]:
+        """Load a cache entry if it exists and is not expired.
+        
+        Args:
+            query: The search query string.
+            options: The search options.
+            
+        Returns:
+            CacheEntry if valid cache exists, None otherwise.
+        """
+        cache_path = self._get_cache_path(query, options)
+        
+        if not cache_path.exists():
+            return None
+            
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json_module.load(f)
+                entry = CacheEntry.from_dict(data)
+                
+                if entry.is_expired():
+                    # Delete expired cache file
+                    try:
+                        cache_path.unlink()
+                    except OSError:
+                        pass
+                    return None
+                    
+                return entry
+        except (OSError, json_module.JSONDecodeError, KeyError) as e:
+            # Invalid cache file - delete it
+            if self.args.debug:
+                print(f"Warning: Invalid cache file, removing: {e}")
+            try:
+                cache_path.unlink()
+            except OSError:
+                pass
+            return None
+    
+    def _save_to_cache(self, query: str, options: str, html: str) -> None:
+        """Save HTML content to cache.
+        
+        Args:
+            query: The search query string.
+            options: The search options.
+            html: The HTML content to cache.
+        """
+        cache_path = self._get_cache_path(query, options)
+        entry = CacheEntry(
+            query=query,
+            options=options,
+            timestamp=time.time(),
+            html=html
+        )
+        
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json_module.dump(entry.to_dict(), f)
+        except OSError as e:
+            if self.args.debug:
+                print(f"Warning: Failed to write cache file: {e}")
 
     def search_company(self) -> list[dict]:
         """Search for companies matching the provided keywords.
@@ -157,68 +287,63 @@ class HandelsRegister:
             CacheError: If cache read/write operations fail.
             ParseError: If HTML parsing fails.
         """
-        cachename = self.companyname2cachename(self.args.schlagwoerter)
+        query = self.args.schlagwoerter
+        options = self.args.schlagwortOptionen
         
         # Try to load from cache
-        if not self.args.force and cachename.exists():
-            try:
-                with open(cachename, "r", encoding="utf-8") as f:
-                    html = f.read()
-                    if not self.args.json:
-                        print(f"return cached content for {self.args.schlagwoerter}")
-            except OSError as e:
-                raise CacheError(f"Failed to read cache file: {e}") from e
-        else:
-            # TODO implement token bucket to abide by rate limit
-            # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            try:
-                self.browser.select_form(name="naviForm")
-            except mechanize.FormNotFoundError as e:
-                raise FormError(f"Navigation form not found. The website structure may have changed: {e}") from e
-            
-            self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
-            self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
-            
-            try:
-                self.browser.submit()
-            except urllib.error.URLError as e:
-                raise NetworkError(f"Failed to submit navigation form: {e.reason}", original_error=e) from e
+        if not self.args.force:
+            cache_entry = self._load_from_cache(query, options)
+            if cache_entry is not None:
+                if not self.args.json:
+                    print(f"return cached content for {query}")
+                return get_companies_in_searchresults(cache_entry.html)
+        
+        # Fetch fresh data
+        # TODO implement token bucket to abide by rate limit
+        # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
+        try:
+            self.browser.select_form(name="naviForm")
+        except mechanize.FormNotFoundError as e:
+            raise FormError(f"Navigation form not found. The website structure may have changed: {e}") from e
+        
+        self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
+        self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
+        
+        try:
+            self.browser.submit()
+        except urllib.error.URLError as e:
+            raise NetworkError(f"Failed to submit navigation form: {e.reason}", original_error=e) from e
 
-            if self.args.debug:
-                print(self.browser.title())
+        if self.args.debug:
+            print(self.browser.title())
 
-            try:
-                self.browser.select_form(name="form")
-            except mechanize.FormNotFoundError as e:
-                raise FormError(f"Search form not found. The website structure may have changed: {e}") from e
+        try:
+            self.browser.select_form(name="form")
+        except mechanize.FormNotFoundError as e:
+            raise FormError(f"Search form not found. The website structure may have changed: {e}") from e
 
-            self.browser["form:schlagwoerter"] = self.args.schlagwoerter
-            so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
+        self.browser["form:schlagwoerter"] = query
+        so_id = schlagwortOptionen.get(options)
 
-            self.browser["form:schlagwortOptionen"] = [str(so_id)]
+        self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
-            try:
-                response_result = self.browser.submit()
-            except urllib.error.URLError as e:
-                raise NetworkError(f"Failed to submit search form: {e.reason}", original_error=e) from e
+        try:
+            response_result = self.browser.submit()
+        except urllib.error.URLError as e:
+            raise NetworkError(f"Failed to submit search form: {e.reason}", original_error=e) from e
 
-            if self.args.debug:
-                print(self.browser.title())
+        if self.args.debug:
+            print(self.browser.title())
 
-            html = response_result.read().decode("utf-8")
-            
-            try:
-                with open(cachename, "w", encoding="utf-8") as f:
-                    f.write(html)
-            except OSError as e:
-                # Cache write failure is not critical - log and continue
-                if self.args.debug:
-                    print(f"Warning: Failed to write cache file: {e}")
+        html = response_result.read().decode("utf-8")
+        
+        # Save to cache
+        self._save_to_cache(query, options, html)
 
-            # TODO catch the situation if there's more than one company?
-            # TODO get all documents attached to the exact company
-            # TODO parse useful information out of the PDFs
-            
+        # TODO catch the situation if there's more than one company?
+        # TODO get all documents attached to the exact company
+        # TODO parse useful information out of the PDFs
+        
         return get_companies_in_searchresults(html)
 
 
