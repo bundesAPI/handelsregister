@@ -18,6 +18,7 @@ from handelsregister import (
     CacheEntry,
     Company,
     CompanyDetails,
+    DetailsParser,
     HandelsRegister,
     HistoryEntry,
     Owner,
@@ -98,6 +99,157 @@ class TestParseSearchResults:
         html = '<html><body><table><tr><td>No grid</td></tr></table></body></html>'
         result = get_companies_in_searchresults(html)
         assert result == []
+
+
+class TestDetailsParser:
+    """Unit tests for DetailsParser (SI/AD/UT parsing)."""
+    
+    @pytest.fixture
+    def sample_si_html(self):
+        """Sample HTML from structured register content (SI)."""
+        return '''
+        <html>
+        <body>
+        <table>
+            <tr><td>Firma:</td><td>GASAG AG</td></tr>
+            <tr><td>Rechtsform:</td><td>Aktiengesellschaft</td></tr>
+            <tr><td>Sitz:</td><td>Berlin</td></tr>
+            <tr><td>Geschäftsanschrift:</td><td>GASAG-Platz 1, 10965 Berlin</td></tr>
+            <tr><td>Stammkapital:</td><td>307.200.000,00 EUR</td></tr>
+            <tr><td>Gegenstand:</td><td>Versorgung der Bevölkerung mit Gas und anderen Energien</td></tr>
+            <tr><td>Registernummer:</td><td>HRB 44343 B</td></tr>
+        </table>
+        <div>Vorstand: Dr. Gerhard Holtmeier (Berlin)</div>
+        </body>
+        </html>
+        '''
+    
+    @pytest.fixture
+    def sample_si_gmbh_html(self):
+        """Sample HTML for a GmbH."""
+        return '''
+        <html>
+        <body>
+        <table>
+            <tr><td>Firma:</td><td>Test GmbH</td></tr>
+            <tr><td>Rechtsform:</td><td>Gesellschaft mit beschränkter Haftung</td></tr>
+            <tr><td>Stammkapital:</td><td>25.000 EUR</td></tr>
+        </table>
+        <p>Geschäftsführer: Max Mustermann</p>
+        </body>
+        </html>
+        '''
+    
+    def test_parse_si_basic(self, sample_si_html):
+        """Test parsing basic SI content."""
+        details = DetailsParser.parse_si(sample_si_html)
+        
+        assert details.name == "GASAG AG"
+        assert details.legal_form == "Aktiengesellschaft"
+        assert "307.200.000" in details.capital
+        assert details.currency == "EUR"
+    
+    def test_parse_si_with_base_info(self, sample_si_html):
+        """Test parsing SI with base company info."""
+        base_info = {
+            'name': 'GASAG AG',
+            'register_num': 'HRB 44343 B',
+            'court': 'Amtsgericht Berlin',
+            'state': 'Berlin',
+            'status': 'aktuell',
+        }
+        details = DetailsParser.parse_si(sample_si_html, base_info)
+        
+        assert details.court == "Amtsgericht Berlin"
+        assert details.state == "Berlin"
+        assert details.status == "aktuell"
+    
+    def test_parse_si_address(self, sample_si_html):
+        """Test parsing address from SI."""
+        details = DetailsParser.parse_si(sample_si_html)
+        
+        assert details.address is not None
+        assert details.address.street == "GASAG-Platz 1"
+        assert details.address.postal_code == "10965"
+        assert details.address.city == "Berlin"
+    
+    def test_parse_si_purpose(self, sample_si_html):
+        """Test parsing company purpose from SI."""
+        details = DetailsParser.parse_si(sample_si_html)
+        
+        assert details.purpose is not None
+        assert "Versorgung" in details.purpose
+        assert "Gas" in details.purpose
+    
+    def test_parse_si_representatives(self, sample_si_html):
+        """Test parsing representatives from SI."""
+        details = DetailsParser.parse_si(sample_si_html)
+        
+        assert len(details.representatives) >= 1
+        vorstand = next((r for r in details.representatives if r.role == "Vorstand"), None)
+        assert vorstand is not None
+        assert "Holtmeier" in vorstand.name
+    
+    def test_parse_si_gmbh(self, sample_si_gmbh_html):
+        """Test parsing GmbH company."""
+        details = DetailsParser.parse_si(sample_si_gmbh_html)
+        
+        assert details.name == "Test GmbH"
+        assert details.legal_form == "Gesellschaft mit beschränkter Haftung"
+        assert "25.000" in details.capital
+        assert details.currency == "EUR"
+    
+    def test_parse_si_gmbh_geschaeftsfuehrer(self, sample_si_gmbh_html):
+        """Test parsing Geschäftsführer from GmbH."""
+        details = DetailsParser.parse_si(sample_si_gmbh_html)
+        
+        gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
+        assert gf is not None
+        assert "Mustermann" in gf.name
+    
+    def test_parse_address_full(self):
+        """Test _parse_address with full address."""
+        addr = DetailsParser._parse_address("Musterstraße 123, 10115 Berlin")
+        
+        assert addr.street == "Musterstraße 123"
+        assert addr.postal_code == "10115"
+        assert addr.city == "Berlin"
+    
+    def test_parse_address_city_only(self):
+        """Test _parse_address with city only."""
+        addr = DetailsParser._parse_address("Hamburg")
+        
+        assert addr.city == "Hamburg"
+        assert addr.street is None
+        assert addr.postal_code is None
+    
+    def test_extract_legal_form_ag(self):
+        """Test extracting Aktiengesellschaft."""
+        result = DetailsParser._extract_legal_form("Eine Aktiengesellschaft")
+        assert result == "Aktiengesellschaft"
+    
+    def test_extract_legal_form_gmbh(self):
+        """Test extracting GmbH."""
+        result = DetailsParser._extract_legal_form("Test GmbH")
+        assert result == "Gesellschaft mit beschränkter Haftung"
+    
+    def test_extract_legal_form_kg(self):
+        """Test extracting Kommanditgesellschaft."""
+        result = DetailsParser._extract_legal_form("Muster GmbH & Co. KG")
+        assert result == "GmbH & Co. KG"
+    
+    def test_extract_legal_form_none(self):
+        """Test no legal form found."""
+        result = DetailsParser._extract_legal_form("Some random text")
+        assert result is None
+    
+    def test_parse_empty_html(self):
+        """Test parsing empty HTML."""
+        details = DetailsParser.parse_si("<html><body></body></html>")
+        
+        assert details.name == ""
+        assert details.capital is None
+        assert details.representatives == []
 
 
 # =============================================================================

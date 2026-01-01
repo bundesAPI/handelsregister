@@ -467,6 +467,235 @@ class SearchCache:
 # Parser Layer
 # =============================================================================
 
+class DetailsParser:
+    """Parses detail view HTML (SI, AD, UT) into structured CompanyDetails."""
+    
+    # Common patterns for extracting data
+    CAPITAL_PATTERN = re.compile(
+        r'(?:Stamm|Grund)kapital[:\s]*([0-9.,]+)\s*(EUR|€|DM)?',
+        re.IGNORECASE
+    )
+    DATE_PATTERN = re.compile(r'\d{1,2}\.\d{1,2}\.\d{4}')
+    
+    @classmethod
+    def parse_si(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+        """Parse structured register content (SI - Strukturierter Registerinhalt).
+        
+        Args:
+            html: The HTML content of the SI detail view.
+            base_info: Optional base company info from search results.
+            
+        Returns:
+            CompanyDetails with all parsed information.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Initialize with base info or empty
+        details = CompanyDetails(
+            name=base_info.get('name', '') if base_info else '',
+            register_num=base_info.get('register_num', '') if base_info else '',
+            court=base_info.get('court', '') if base_info else '',
+            state=base_info.get('state', '') if base_info else '',
+            status=base_info.get('status', '') if base_info else '',
+        )
+        
+        # Parse structured content - typically in tables or definition lists
+        details = cls._parse_si_tables(soup, details)
+        details = cls._parse_si_sections(soup, details)
+        
+        return details
+    
+    @classmethod
+    def _parse_si_tables(cls, soup: BeautifulSoup, details: CompanyDetails) -> CompanyDetails:
+        """Extract data from SI tables."""
+        # Look for tables with company data
+        tables = soup.find_all('table')
+        
+        for table in tables:
+            rows = table.find_all('tr')
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 2:
+                    label = cells[0].get_text(strip=True).lower()
+                    value = cells[1].get_text(strip=True)
+                    
+                    details = cls._map_field(label, value, details)
+        
+        return details
+    
+    @classmethod
+    def _parse_si_sections(cls, soup: BeautifulSoup, details: CompanyDetails) -> CompanyDetails:
+        """Extract data from SI sections (divs, panels, etc.)."""
+        # Look for labeled sections
+        for div in soup.find_all(['div', 'span', 'p']):
+            text = div.get_text(strip=True)
+            
+            # Extract capital
+            if details.capital is None:
+                capital_match = cls.CAPITAL_PATTERN.search(text)
+                if capital_match:
+                    details.capital = capital_match.group(1)
+                    if capital_match.group(2):
+                        details.currency = capital_match.group(2).replace('€', 'EUR')
+            
+            # Extract legal form
+            if details.legal_form is None:
+                details.legal_form = cls._extract_legal_form(text)
+            
+            # Extract representatives
+            reps = cls._extract_representatives(div)
+            if reps:
+                details.representatives.extend(reps)
+        
+        return details
+    
+    @classmethod
+    def _map_field(cls, label: str, value: str, details: CompanyDetails) -> CompanyDetails:
+        """Map a label-value pair to the appropriate CompanyDetails field."""
+        if not value:
+            return details
+        
+        # Firma / Name
+        if any(x in label for x in ['firma', 'name']) and not details.name:
+            details.name = value
+        
+        # Rechtsform
+        elif 'rechtsform' in label:
+            details.legal_form = value
+        
+        # Sitz / Adresse
+        elif 'sitz' in label or 'geschäftsanschrift' in label:
+            details.address = cls._parse_address(value)
+        
+        # Stammkapital / Grundkapital
+        elif 'kapital' in label:
+            # Try to extract amount and currency from value
+            # Pattern: number followed by optional currency
+            amount_pattern = re.match(r'([0-9.,]+)\s*(EUR|€|DM)?', value)
+            if amount_pattern:
+                details.capital = amount_pattern.group(1).strip()
+                if amount_pattern.group(2):
+                    details.currency = amount_pattern.group(2).replace('€', 'EUR')
+            else:
+                details.capital = value
+        
+        # Gegenstand
+        elif 'gegenstand' in label or 'unternehmensgegenstand' in label:
+            details.purpose = value
+        
+        # Registernummer
+        elif 'registernummer' in label or 'aktenzeichen' in label:
+            if not details.register_num:
+                details.register_num = value
+        
+        # Eintragung
+        elif 'eintrag' in label and 'datum' in label:
+            details.registration_date = value
+        
+        # Löschung
+        elif 'lösch' in label:
+            details.deletion_date = value
+        
+        return details
+    
+    @classmethod
+    def _parse_address(cls, text: str) -> Address:
+        """Parse an address string into an Address object."""
+        # Try to extract postal code and city
+        plz_city_match = re.search(r'(\d{5})\s+(.+?)(?:,|$)', text)
+        
+        if plz_city_match:
+            postal_code = plz_city_match.group(1)
+            city = plz_city_match.group(2).strip()
+            # Everything before the postal code is the street
+            street_part = text[:plz_city_match.start()].strip().rstrip(',')
+            return Address(
+                street=street_part if street_part else None,
+                postal_code=postal_code,
+                city=city,
+            )
+        else:
+            # Just use the whole text as city
+            return Address(city=text)
+    
+    @classmethod
+    def _extract_legal_form(cls, text: str) -> Optional[str]:
+        """Extract legal form from text.
+        
+        The order matters: more specific forms (like GmbH & Co. KG) must be
+        checked before less specific ones (like GmbH or KG).
+        """
+        # Order matters: more specific forms first
+        legal_forms = [
+            # Compound forms first
+            ('GmbH & Co. KG', 'GmbH & Co. KG'),
+            ('GmbH & Co. OHG', 'GmbH & Co. OHG'),
+            ('UG (haftungsbeschränkt) & Co. KG', 'UG & Co. KG'),
+            # Then standard forms
+            ('Europäische Aktiengesellschaft', 'SE'),
+            ('Aktiengesellschaft', 'AG'),
+            ('Gesellschaft mit beschränkter Haftung', 'GmbH'),
+            ('UG (haftungsbeschränkt)', 'UG'),
+            ('Kommanditgesellschaft', 'KG'),
+            ('Offene Handelsgesellschaft', 'OHG'),
+            ('Eingetragene Genossenschaft', 'eG'),
+            ('Eingetragener Verein', 'e.V.'),
+            ('Partnerschaftsgesellschaft', 'PartG'),
+            ('Einzelkaufmann', 'e.K.'),
+            ('Einzelkauffrau', 'e.Kfr.'),
+        ]
+        
+        text_lower = text.lower()
+        for full_name, abbreviation in legal_forms:
+            # Check for full name
+            if full_name.lower() in text_lower:
+                return full_name
+            # Check for abbreviation (with word boundaries)
+            if f' {abbreviation}' in text or text.endswith(abbreviation):
+                return full_name
+            # Also check without space for compound names
+            if abbreviation in text and '&' in abbreviation:
+                return full_name
+        
+        return None
+    
+    @classmethod
+    def _extract_representatives(cls, element: Tag) -> list[Representative]:
+        """Extract representative information from an element."""
+        representatives = []
+        text = element.get_text()
+        
+        # Common role patterns
+        role_patterns = [
+            (r'Geschäftsführer(?:in)?[:\s]+([^,;]+)', 'Geschäftsführer'),
+            (r'Vorstand[:\s]+([^,;]+)', 'Vorstand'),
+            (r'Prokurist(?:in)?[:\s]+([^,;]+)', 'Prokurist'),
+            (r'Inhaber(?:in)?[:\s]+([^,;]+)', 'Inhaber'),
+            (r'Persönlich haftende(?:r)? Gesellschafter(?:in)?[:\s]+([^,;]+)', 
+             'Persönlich haftender Gesellschafter'),
+        ]
+        
+        for pattern, role in role_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                name = match.group(1).strip()
+                if name and len(name) > 2:
+                    # Check for location in parentheses
+                    location = None
+                    loc_match = re.search(r'\(([^)]+)\)', name)
+                    if loc_match:
+                        location = loc_match.group(1)
+                        name = name[:loc_match.start()].strip()
+                    
+                    representatives.append(Representative(
+                        name=name,
+                        role=role,
+                        location=location,
+                    ))
+        
+        return representatives
+
+
 class ResultParser:
     """Parses HTML search results into structured company data."""
     
