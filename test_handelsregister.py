@@ -24,6 +24,7 @@ from handelsregister import (
     SearchOptions,
     get_companies_in_searchresults,
     parse_result,
+    search,
     SUFFIX_MAP,
     STATE_CODES,
     REGISTER_TYPES,
@@ -285,6 +286,78 @@ class TestSuffixMap:
 
 
 # =============================================================================
+# Unit Tests - Public API
+# =============================================================================
+
+class TestPublicAPI:
+    """Unit tests for the public search() function."""
+
+    def test_search_function_exists(self):
+        """Test that the search function is importable."""
+        assert callable(search)
+
+    def test_search_options_from_parameters(self):
+        """Test that SearchOptions can be created with all parameters."""
+        opts = SearchOptions(
+            keywords="Test",
+            keyword_option="exact",
+            states=["BE", "HH"],
+            register_type="HRB",
+            register_number="12345",
+            include_deleted=True,
+            similar_sounding=True,
+            results_per_page=50,
+        )
+        
+        assert opts.keywords == "Test"
+        assert opts.keyword_option == "exact"
+        assert opts.states == ["BE", "HH"]
+        assert opts.register_type == "HRB"
+        assert opts.register_number == "12345"
+        assert opts.include_deleted is True
+        assert opts.similar_sounding is True
+        assert opts.results_per_page == 50
+
+
+class TestHandelsRegisterClass:
+    """Unit tests for HandelsRegister class initialization."""
+
+    def test_init_without_args(self):
+        """Test that HandelsRegister can be initialized without args."""
+        hr = HandelsRegister(debug=False)
+        assert hr.args is None
+        assert hr.cache is not None
+        assert hr.browser is not None
+
+    def test_init_with_debug(self):
+        """Test that debug flag is stored correctly."""
+        hr = HandelsRegister(debug=True)
+        assert hr._debug is True
+
+    def test_init_with_custom_cache(self, temp_cache_dir):
+        """Test that custom cache is used."""
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        hr = HandelsRegister(cache=cache)
+        assert hr.cache is cache
+
+    def test_from_options_classmethod(self):
+        """Test the from_options class method."""
+        opts = SearchOptions(keywords="Test")
+        hr = HandelsRegister.from_options(opts, debug=True)
+        
+        assert hr._debug is True
+        assert hasattr(hr, '_default_options')
+        assert hr._default_options.keywords == "Test"
+
+    def test_search_company_requires_args(self):
+        """Test that search_company raises error without args."""
+        hr = HandelsRegister()
+        
+        with pytest.raises(ValueError, match="benötigt args"):
+            hr.search_company()
+
+
+# =============================================================================
 # Integration Tests - Live API
 # =============================================================================
 
@@ -351,5 +424,42 @@ class TestLiveAPI:
         
         assert target is not None, "Haus-Anker Verwaltungs GmbH with expected number not found"
         assert target['register_num'] == 'HRB 138434 B'
+
+    def test_search_function_simple(self):
+        """Test the simple search() function API."""
+        results = search("GASAG AG", keyword_option="exact", force_refresh=True)
+        
+        assert results is not None
+        assert len(results) > 0
+        assert any("GASAG" in r.get('name', '') for r in results)
+
+    def test_search_function_with_states(self):
+        """Test search() with state filtering."""
+        results = search(
+            "Bank",
+            states=["BE"],
+            register_type="HRB",
+            force_refresh=True,
+        )
+        
+        assert results is not None
+        # Results should be from Berlin
+        for r in results:
+            if r.get('state'):
+                assert r['state'] == 'Berlin'
+
+    def test_search_with_options_method(self):
+        """Test HandelsRegister.search_with_options() method."""
+        opts = SearchOptions(
+            keywords="Deutsche Bahn",
+            keyword_option="all",
+        )
+        
+        hr = HandelsRegister(debug=False)
+        hr.open_startpage()
+        results = hr.search_with_options(opts, force_refresh=True)
+        
+        assert results is not None
+        assert len(results) > 0
 
 
