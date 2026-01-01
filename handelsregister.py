@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 # Configuration
 # =============================================================================
 
-DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL
+DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for search results
+DETAILS_CACHE_TTL_SECONDS: int = 86400  # 24 hours TTL for company details
 BASE_URL: str = "https://www.handelsregister.de"
 REQUEST_TIMEOUT: int = 10
 
@@ -369,24 +370,31 @@ class Company:
 # =============================================================================
 
 class SearchCache:
-    """Handles caching of search results with TTL expiration.
+    """Handles caching of search results and company details with TTL expiration.
     
     Cache files are stored as JSON in a temporary directory with SHA-256
     hashed filenames to prevent path traversal attacks.
+    
+    The cache supports different TTLs for different types of data:
+    - Search results: Shorter TTL (default 1 hour) as results may change
+    - Company details: Longer TTL (default 24 hours) as details change rarely
     """
     
     def __init__(
         self, 
         cache_dir: Optional[pathlib.Path] = None,
-        ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
+        ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS,
+        details_ttl_seconds: int = DETAILS_CACHE_TTL_SECONDS,
     ) -> None:
         """Initialize the cache.
         
         Args:
             cache_dir: Directory to store cache files. Defaults to temp directory.
-            ttl_seconds: Time-to-live for cache entries in seconds.
+            ttl_seconds: Time-to-live for search result cache entries in seconds.
+            details_ttl_seconds: Time-to-live for details cache entries in seconds.
         """
         self.ttl_seconds = ttl_seconds
+        self.details_ttl_seconds = details_ttl_seconds
         self.cache_dir = cache_dir or (
             pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
         )
@@ -406,23 +414,30 @@ class SearchCache:
         """Get cached HTML content if available and not expired.
         
         Args:
-            query: The search query string.
+            query: The search query string (or cache key for details).
             options: The search options.
             
         Returns:
             Cached HTML content, or None if not available.
+            
+        Note:
+            Uses details_ttl_seconds for cache keys starting with "details:",
+            otherwise uses ttl_seconds.
         """
         cache_path = self._get_cache_path(query, options)
         
         if not cache_path.exists():
             return None
+        
+        # Use longer TTL for details cache
+        ttl = self.details_ttl_seconds if query.startswith("details:") else self.ttl_seconds
             
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
                 data = json_module.load(f)
                 entry = CacheEntry.from_dict(data)
                 
-                if entry.is_expired(self.ttl_seconds):
+                if entry.is_expired(ttl):
                     self._delete_file(cache_path)
                     return None
                     
@@ -461,6 +476,63 @@ class SearchCache:
             path.unlink()
         except OSError:
             pass
+    
+    def clear(self, details_only: bool = False) -> int:
+        """Clear all cache files.
+        
+        Args:
+            details_only: If True, only clear details cache (keys starting with "details:").
+            
+        Returns:
+            Number of files deleted.
+        """
+        count = 0
+        for cache_file in self.cache_dir.glob("*.json"):
+            try:
+                if details_only:
+                    # Read the file to check if it's a details cache
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        data = json_module.load(f)
+                        if not data.get('query', '').startswith('details:'):
+                            continue
+                cache_file.unlink()
+                count += 1
+            except (OSError, json_module.JSONDecodeError):
+                pass
+        return count
+    
+    def get_stats(self) -> dict:
+        """Get cache statistics.
+        
+        Returns:
+            Dictionary with cache statistics:
+            - total_files: Total number of cache files
+            - search_files: Number of search result cache files
+            - details_files: Number of details cache files
+            - total_size_bytes: Total size in bytes
+        """
+        stats = {
+            'total_files': 0,
+            'search_files': 0,
+            'details_files': 0,
+            'total_size_bytes': 0,
+        }
+        
+        for cache_file in self.cache_dir.glob("*.json"):
+            try:
+                stats['total_files'] += 1
+                stats['total_size_bytes'] += cache_file.stat().st_size
+                
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    data = json_module.load(f)
+                    if data.get('query', '').startswith('details:'):
+                        stats['details_files'] += 1
+                    else:
+                        stats['search_files'] += 1
+            except (OSError, json_module.JSONDecodeError):
+                pass
+        
+        return stats
 
 
 # =============================================================================

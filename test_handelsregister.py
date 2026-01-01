@@ -582,6 +582,75 @@ class TestCache:
         
         # Expired entry should return None
         assert cache.get("test", "all") is None
+    
+    def test_cache_details_ttl(self, temp_cache_dir):
+        """Test that details cache uses longer TTL."""
+        cache = SearchCache(
+            cache_dir=temp_cache_dir, 
+            ttl_seconds=0,  # Search TTL expired
+            details_ttl_seconds=3600,  # Details TTL not expired
+        )
+        
+        # Set a details cache entry
+        cache.set("details:SI:HRB123", "", "<html>details</html>")
+        time.sleep(0.1)
+        
+        # Details should still be available (longer TTL)
+        assert cache.get("details:SI:HRB123", "") == "<html>details</html>"
+        
+        # But search cache would be expired
+        cache.set("search", "all", "<html>search</html>")
+        time.sleep(0.1)
+        assert cache.get("search", "all") is None
+    
+    def test_cache_clear(self, temp_cache_dir):
+        """Test clearing the cache."""
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        # Add some entries
+        cache.set("search1", "all", "<html>1</html>")
+        cache.set("search2", "all", "<html>2</html>")
+        cache.set("details:SI:HRB1", "", "<html>d1</html>")
+        
+        # Clear all
+        count = cache.clear()
+        assert count == 3
+        
+        # Verify all cleared
+        assert cache.get("search1", "all") is None
+        assert cache.get("details:SI:HRB1", "") is None
+    
+    def test_cache_clear_details_only(self, temp_cache_dir):
+        """Test clearing only details cache."""
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        # Add entries
+        cache.set("search1", "all", "<html>search</html>")
+        cache.set("details:SI:HRB1", "", "<html>details</html>")
+        
+        # Clear details only
+        count = cache.clear(details_only=True)
+        assert count == 1
+        
+        # Search should still exist, details should be gone
+        assert cache.get("search1", "all") == "<html>search</html>"
+        assert cache.get("details:SI:HRB1", "") is None
+    
+    def test_cache_stats(self, temp_cache_dir):
+        """Test cache statistics."""
+        cache = SearchCache(cache_dir=temp_cache_dir)
+        
+        # Add entries
+        cache.set("search1", "all", "<html>search</html>")
+        cache.set("details:SI:HRB1", "", "<html>details</html>")
+        cache.set("details:AD:HRB2", "", "<html>details2</html>")
+        
+        stats = cache.get_stats()
+        
+        assert stats['total_files'] == 3
+        assert stats['search_files'] == 1
+        assert stats['details_files'] == 2
+        assert stats['total_size_bytes'] > 0
 
 
 # =============================================================================
