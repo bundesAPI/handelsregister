@@ -4,26 +4,64 @@ bundesAPI/handelsregister is the command-line interface for the shared register 
 You can query, download, automate and much more, without using a web browser.
 """
 
+from __future__ import annotations
+
 import argparse
 import tempfile
 import mechanize
 import re
 import pathlib
 import sys
+from dataclasses import dataclass, field
+from typing import Optional
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 import urllib.parse
 
 # Dictionaries to map arguments to values
-schlagwortOptionen = {
+schlagwortOptionen: dict[str, int] = {
     "all": 1,
     "min": 2,
     "exact": 3
 }
 
+
+@dataclass
+class HistoryEntry:
+    """Represents a historical name/location entry for a company."""
+    name: str
+    location: str
+
+
+@dataclass
+class Company:
+    """Represents a company record from the Handelsregister."""
+    court: str
+    name: str
+    state: str
+    status: str
+    status_normalized: str
+    documents: str
+    register_num: Optional[str] = None
+    history: list[HistoryEntry] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for backward compatibility."""
+        return {
+            'court': self.court,
+            'register_num': self.register_num,
+            'name': self.name,
+            'state': self.state,
+            'status': self.status,
+            'statusCurrent': self.status_normalized,
+            'documents': self.documents,
+            'history': [(h.name, h.location) for h in self.history]
+        }
+
 class HandelsRegister:
-    def __init__(self, args):
+    def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.browser = mechanize.Browser()
+        self.browser: mechanize.Browser = mechanize.Browser()
 
         self.browser.set_debug_http(args.debug)
         self.browser.set_debug_responses(args.debug)
@@ -50,16 +88,16 @@ class HandelsRegister:
             (   "Connection", "keep-alive"    ),
         ]
         
-        self.cachedir = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
+        self.cachedir: pathlib.Path = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
-    def open_startpage(self):
+    def open_startpage(self) -> None:
         self.browser.open("https://www.handelsregister.de", timeout=10)
 
-    def companyname2cachename(self, companyname):
+    def companyname2cachename(self, companyname: str) -> pathlib.Path:
         return self.cachedir / companyname
 
-    def search_company(self):
+    def search_company(self) -> list[dict]:
         cachename = self.companyname2cachename(self.args.schlagwoerter)
         if self.args.force==False and cachename.exists():
             with open(cachename, "r") as f:
@@ -99,69 +137,101 @@ class HandelsRegister:
         return get_companies_in_searchresults(html)
 
 
+# Mapping of states to register type suffixes
+SUFFIX_MAP: dict[str, dict[str, str]] = {
+    'Berlin': {'HRB': ' B'},
+    'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
+}
 
-def parse_result(result):
-    cells = []
-    for cellnum, cell in enumerate(result.find_all('td')):
-        cells.append(cell.text.strip())
-    d = {}
-    d['court'] = cells[1]
+
+def parse_result(result: Tag) -> dict:
+    """Parse a single search result row into a company dictionary.
+    
+    Args:
+        result: A BeautifulSoup Tag representing a table row.
+        
+    Returns:
+        A dictionary containing company information.
+    """
+    cells: list[str] = [cell.text.strip() for cell in result.find_all('td')]
+    
+    court = cells[1]
     
     # Extract register number: HRB, HRA, VR, GnR followed by numbers (e.g. HRB 12345, VR 6789)
     # Also capture suffix letter if present (e.g. HRB 12345 B), but avoid matching start of words (e.g. " Formerly")
-    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', d['court'])
-    d['register_num'] = reg_match.group(0) if reg_match else None
+    reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', court)
+    register_num: Optional[str] = reg_match.group(0) if reg_match else None
 
-    d['name'] = cells[2]
-    d['state'] = cells[3]
-    d['status'] = cells[4].strip()  # Original value for backward compatibility
-    d['statusCurrent'] = cells[4].strip().upper().replace(' ', '_')  # Transformed value
-
-    # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen) which might be implicit
-    if d['register_num']:
-        suffix_map = {
-            'Berlin': {'HRB': ' B'},
-            'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
-        }
-        reg_type = d['register_num'].split()[0]
-        suffix = suffix_map.get(d['state'], {}).get(reg_type)
-        if suffix and not d['register_num'].endswith(suffix):
-            d['register_num'] += suffix
-    d['documents'] = cells[5] # todo: get the document links
-    d['history'] = []
+    state = cells[3]
+    status = cells[4].strip()
+    
+    # Ensure consistent register number suffixes (e.g. ' B' for Berlin HRB, ' HB' for Bremen)
+    if register_num:
+        reg_type = register_num.split()[0]
+        suffix = SUFFIX_MAP.get(state, {}).get(reg_type)
+        if suffix and not register_num.endswith(suffix):
+            register_num += suffix
+    
+    # Parse history entries
+    history: list[tuple[str, str]] = []
     hist_start = 8
-
     for i in range(hist_start, len(cells), 3):
         if i + 1 >= len(cells):
             break
         if "Branches" in cells[i] or "Niederlassungen" in cells[i]:
             break
-        d['history'].append((cells[i], cells[i+1])) # (name, location)
+        history.append((cells[i], cells[i + 1]))
+    
+    return {
+        'court': court,
+        'register_num': register_num,
+        'name': cells[2],
+        'state': state,
+        'status': status,
+        'statusCurrent': status.upper().replace(' ', '_'),
+        'documents': cells[5],
+        'history': history
+    }
 
-    return d
 
-def pr_company_info(c):
+def pr_company_info(c: dict) -> None:
+    """Print company information to stdout.
+    
+    Args:
+        c: A dictionary containing company information.
+    """
     for tag in ('name', 'court', 'register_num', 'district', 'state', 'statusCurrent'):
-        print('%s: %s' % (tag, c.get(tag, '-')))
+        print(f"{tag}: {c.get(tag, '-')}")
     print('history:')
-    for name, loc in c.get('history'):
+    for name, loc in c.get('history', []):
         print(name, loc)
 
-def get_companies_in_searchresults(html):
+
+def get_companies_in_searchresults(html: str) -> list[dict]:
+    """Extract company records from search results HTML.
+    
+    Args:
+        html: The HTML content of the search results page.
+        
+    Returns:
+        A list of dictionaries, each containing company information.
+    """
     soup = BeautifulSoup(html, 'html.parser')
     grid = soup.find('table', role='grid')
-  
-    results = []
+    
+    results: list[dict] = []
+    if grid is None:
+        return results
+        
     for result in grid.find_all('tr'):
-        a = result.get('data-ri')
-        if a is not None:
-            index = int(a)
-
+        data_ri = result.get('data-ri')
+        if data_ri is not None:
             d = parse_result(result)
             results.append(d)
     return results
 
-def parse_args():
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='A handelsregister CLI')
     parser.add_argument(
                           "-d",
