@@ -1,43 +1,50 @@
-[[source]]
-url = "https://pypi.org/simple"
-verify_ssl = true
-name = "pypi"
-
-[tool.poetry.dependencies]
-python = ">=3.9,<4"
-mechanize = ">=0.4.8"
-beautifulsoup4 = ">=4.11.0"
-
-[tool.poetry.dev-dependencies]
-black = ">=22.6.0"
-pytest = ">=7.0.0"
-
-[tool.poetry]
+[project]
 name = "handelsregister"
 version = "0.2.0"
-description = "CLI for the German Handelsregister (commercial register) portal"
-authors = ["BundesAPI <kontakt@bund.dev>"]
+description = "Python-Package für das deutsche Handelsregister"
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/bundesAPI/handelsregister"
-keywords = ["handelsregister", "germany", "commercial-register", "cli"]
+authors = [
+    { name = "BundesAPI", email = "kontakt@bund.dev" }
+]
+keywords = ["handelsregister", "germany", "commercial-register", "cli", "api"]
+requires-python = ">=3.9"
+
+dependencies = [
+    "mechanize>=0.4.8",
+    "beautifulsoup4>=4.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=22.6.0",
+    "pytest>=7.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/bundesAPI/handelsregister"
+Repository = "https://github.com/bundesAPI/handelsregister"
+Issues = "https://github.com/bundesAPI/handelsregister/issues"
+
+[project.scripts]
+handelsregister = "handelsregister:main"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-envlist = py39,py310,py311,py312
-isolated_build = True
+[tool.uv]
+dev-dependencies = [
+    "black>=22.6.0",
+    "pytest>=7.0.0",
+]
 
-[tox:.package]
-basepython = python3
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that hit live API (deselect with '-m \"not integration\"')",
+    "slow: marks tests as slow running (deselect with '-m \"not slow\"')",
+]
 
-[testenv]
-deps = pytest
-usedevelop = true
-commands =
-    pytest
-"""
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
