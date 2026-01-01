@@ -209,6 +209,136 @@ class HistoryEntry:
 
 
 @dataclass
+class Address:
+    """Represents a business address."""
+    street: Optional[str] = None
+    postal_code: Optional[str] = None
+    city: Optional[str] = None
+    country: str = "Deutschland"
+    
+    def __str__(self) -> str:
+        """Format address as string."""
+        parts = []
+        if self.street:
+            parts.append(self.street)
+        if self.postal_code and self.city:
+            parts.append(f"{self.postal_code} {self.city}")
+        elif self.city:
+            parts.append(self.city)
+        if self.country and self.country != "Deutschland":
+            parts.append(self.country)
+        return ", ".join(parts) if parts else ""
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return {
+            'street': self.street,
+            'postal_code': self.postal_code,
+            'city': self.city,
+            'country': self.country,
+        }
+
+
+@dataclass
+class Representative:
+    """Represents a company representative (Geschäftsführer, Vorstand, etc.)."""
+    name: str
+    role: str  # e.g., "Geschäftsführer", "Vorstand", "Prokurist"
+    location: Optional[str] = None
+    birth_date: Optional[str] = None
+    restrictions: Optional[str] = None  # e.g., "einzelvertretungsberechtigt"
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return {
+            'name': self.name,
+            'role': self.role,
+            'location': self.location,
+            'birth_date': self.birth_date,
+            'restrictions': self.restrictions,
+        }
+
+
+@dataclass
+class Owner:
+    """Represents a company owner/shareholder (Gesellschafter)."""
+    name: str
+    share: Optional[str] = None  # e.g., "50%", "25.000 EUR"
+    owner_type: Optional[str] = None  # e.g., "Kommanditist", "Gesellschafter"
+    location: Optional[str] = None
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return {
+            'name': self.name,
+            'share': self.share,
+            'owner_type': self.owner_type,
+            'location': self.location,
+        }
+
+
+@dataclass
+class CompanyDetails:
+    """Extended company information from detail views.
+    
+    This class contains all information available from the Handelsregister
+    detail views (AD, SI, UT).
+    """
+    # Basic identification (from search results)
+    name: str
+    register_num: str
+    court: str
+    state: str
+    status: str
+    
+    # Extended information (from detail views)
+    legal_form: Optional[str] = None  # Rechtsform (AG, GmbH, KG, etc.)
+    capital: Optional[str] = None  # Stammkapital / Grundkapital
+    currency: Optional[str] = None  # EUR, etc.
+    address: Optional[Address] = None
+    purpose: Optional[str] = None  # Unternehmensgegenstand
+    representatives: list[Representative] = field(default_factory=list)
+    owners: list[Owner] = field(default_factory=list)
+    registration_date: Optional[str] = None  # Eintragungsdatum
+    last_update: Optional[str] = None  # Letzte Änderung
+    deletion_date: Optional[str] = None  # Löschungsdatum (if deleted)
+    
+    # Additional metadata
+    raw_data: Optional[dict] = field(default=None, repr=False)  # Original parsed data
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'name': self.name,
+            'register_num': self.register_num,
+            'court': self.court,
+            'state': self.state,
+            'status': self.status,
+            'legal_form': self.legal_form,
+            'capital': self.capital,
+            'currency': self.currency,
+            'address': self.address.to_dict() if self.address else None,
+            'purpose': self.purpose,
+            'representatives': [r.to_dict() for r in self.representatives],
+            'owners': [o.to_dict() for o in self.owners],
+            'registration_date': self.registration_date,
+            'last_update': self.last_update,
+            'deletion_date': self.deletion_date,
+        }
+    
+    @classmethod
+    def from_company(cls, company: dict) -> 'CompanyDetails':
+        """Create CompanyDetails from a basic company search result dict."""
+        return cls(
+            name=company.get('name', ''),
+            register_num=company.get('register_num', ''),
+            court=company.get('court', ''),
+            state=company.get('state', ''),
+            status=company.get('status', ''),
+        )
+
+
+@dataclass
 class Company:
     """Represents a company record from the Handelsregister."""
     court: str

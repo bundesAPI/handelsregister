@@ -14,11 +14,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from handelsregister import (
+    Address,
     CacheEntry,
     Company,
+    CompanyDetails,
     HandelsRegister,
     HistoryEntry,
+    Owner,
     ParseError,
+    Representative,
     ResultParser,
     SearchCache,
     SearchOptions,
@@ -190,6 +194,166 @@ class TestDataClasses:
         assert opts.include_deleted is False
         assert opts.similar_sounding is False
         assert opts.results_per_page == 100
+
+
+class TestAddress:
+    """Unit tests for Address dataclass."""
+    
+    def test_address_str_full(self):
+        """Test Address.__str__() with all fields."""
+        addr = Address(
+            street="Musterstraße 123",
+            postal_code="10115",
+            city="Berlin",
+            country="Deutschland"
+        )
+        assert str(addr) == "Musterstraße 123, 10115 Berlin"
+    
+    def test_address_str_minimal(self):
+        """Test Address.__str__() with minimal fields."""
+        addr = Address(city="Hamburg")
+        assert str(addr) == "Hamburg"
+    
+    def test_address_str_empty(self):
+        """Test Address.__str__() with no fields."""
+        addr = Address()
+        assert str(addr) == ""
+    
+    def test_address_str_foreign(self):
+        """Test Address.__str__() with foreign country."""
+        addr = Address(city="Wien", country="Österreich")
+        assert str(addr) == "Wien, Österreich"
+    
+    def test_address_to_dict(self):
+        """Test Address.to_dict()."""
+        addr = Address(street="Test 1", postal_code="12345", city="Berlin")
+        d = addr.to_dict()
+        assert d['street'] == "Test 1"
+        assert d['postal_code'] == "12345"
+        assert d['city'] == "Berlin"
+        assert d['country'] == "Deutschland"
+
+
+class TestRepresentative:
+    """Unit tests for Representative dataclass."""
+    
+    def test_representative_creation(self):
+        """Test creating a Representative."""
+        rep = Representative(
+            name="Max Mustermann",
+            role="Geschäftsführer",
+            location="Berlin",
+            restrictions="einzelvertretungsberechtigt"
+        )
+        assert rep.name == "Max Mustermann"
+        assert rep.role == "Geschäftsführer"
+        assert rep.location == "Berlin"
+        assert rep.restrictions == "einzelvertretungsberechtigt"
+    
+    def test_representative_to_dict(self):
+        """Test Representative.to_dict()."""
+        rep = Representative(name="Test", role="Vorstand")
+        d = rep.to_dict()
+        assert d['name'] == "Test"
+        assert d['role'] == "Vorstand"
+        assert d['location'] is None
+
+
+class TestOwner:
+    """Unit tests for Owner dataclass."""
+    
+    def test_owner_creation(self):
+        """Test creating an Owner."""
+        owner = Owner(
+            name="Holding GmbH",
+            share="100%",
+            owner_type="Gesellschafter",
+            location="München"
+        )
+        assert owner.name == "Holding GmbH"
+        assert owner.share == "100%"
+        assert owner.owner_type == "Gesellschafter"
+    
+    def test_owner_to_dict(self):
+        """Test Owner.to_dict()."""
+        owner = Owner(name="Test GmbH", share="50.000 EUR")
+        d = owner.to_dict()
+        assert d['name'] == "Test GmbH"
+        assert d['share'] == "50.000 EUR"
+
+
+class TestCompanyDetails:
+    """Unit tests for CompanyDetails dataclass."""
+    
+    def test_company_details_creation(self):
+        """Test creating CompanyDetails with all fields."""
+        details = CompanyDetails(
+            name="GASAG AG",
+            register_num="HRB 44343 B",
+            court="Amtsgericht Berlin (Charlottenburg)",
+            state="Berlin",
+            status="aktuell",
+            legal_form="Aktiengesellschaft",
+            capital="307.200.000",
+            currency="EUR",
+            address=Address(street="GASAG-Platz 1", postal_code="10965", city="Berlin"),
+            purpose="Versorgung mit Energie",
+            representatives=[
+                Representative(name="Dr. Gerhard Holtmeier", role="Vorstand")
+            ],
+        )
+        assert details.name == "GASAG AG"
+        assert details.legal_form == "Aktiengesellschaft"
+        assert details.capital == "307.200.000"
+        assert len(details.representatives) == 1
+    
+    def test_company_details_to_dict(self):
+        """Test CompanyDetails.to_dict()."""
+        details = CompanyDetails(
+            name="Test GmbH",
+            register_num="HRB 12345",
+            court="Amtsgericht Berlin",
+            state="Berlin",
+            status="aktuell",
+            legal_form="GmbH",
+            capital="25.000",
+            currency="EUR",
+        )
+        d = details.to_dict()
+        assert d['name'] == "Test GmbH"
+        assert d['legal_form'] == "GmbH"
+        assert d['capital'] == "25.000"
+        assert d['representatives'] == []
+        assert d['owners'] == []
+    
+    def test_company_details_from_company(self):
+        """Test CompanyDetails.from_company() class method."""
+        company = {
+            'name': 'GASAG AG',
+            'register_num': 'HRB 44343 B',
+            'court': 'Berlin Amtsgericht',
+            'state': 'Berlin',
+            'status': 'aktuell',
+        }
+        details = CompanyDetails.from_company(company)
+        assert details.name == "GASAG AG"
+        assert details.register_num == "HRB 44343 B"
+        assert details.legal_form is None  # Not set from basic company
+    
+    def test_company_details_defaults(self):
+        """Test CompanyDetails default values."""
+        details = CompanyDetails(
+            name="Test",
+            register_num="HRB 1",
+            court="AG Berlin",
+            state="Berlin",
+            status="aktuell",
+        )
+        assert details.legal_form is None
+        assert details.capital is None
+        assert details.address is None
+        assert details.representatives == []
+        assert details.owners == []
 
 
 # =============================================================================
