@@ -3,18 +3,6 @@
 import pytest
 
 
-def pytest_configure(config):
-    """Configure custom pytest markers."""
-    config.addinivalue_line(
-        "markers", 
-        "integration: marks tests that hit live API (deselect with '-m \"not integration\"')"
-    )
-    config.addinivalue_line(
-        "markers", 
-        "slow: marks tests as slow running (deselect with '-m \"not slow\"')"
-    )
-
-
 def pytest_collection_modifyitems(config, items):
     """Skip integration tests by default unless explicitly requested."""
     if config.getoption("-m"):
@@ -25,4 +13,3 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_integration)
-
