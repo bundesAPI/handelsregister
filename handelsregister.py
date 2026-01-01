@@ -6,21 +6,28 @@ You can query, download, automate and much more, without using a web browser.
 
 from __future__ import annotations
 
+# Standard library imports
 import argparse
 import hashlib
 import json as json_module
+import logging
+import pathlib
+import re
+import sys
 import tempfile
 import time
-import mechanize
-import re
-import pathlib
-import sys
 import urllib.error
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Optional
+
+# Third-party imports
+import mechanize
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-import urllib.parse
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 # Cache configuration
 DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL
@@ -244,8 +251,7 @@ class HandelsRegister:
                 return entry
         except (OSError, json_module.JSONDecodeError, KeyError) as e:
             # Invalid cache file - delete it
-            if self.args.debug:
-                print(f"Warning: Invalid cache file, removing: {e}")
+            logger.warning("Invalid cache file, removing: %s", e)
             try:
                 cache_path.unlink()
             except OSError:
@@ -272,8 +278,7 @@ class HandelsRegister:
             with open(cache_path, "w", encoding="utf-8") as f:
                 json_module.dump(entry.to_dict(), f)
         except OSError as e:
-            if self.args.debug:
-                print(f"Warning: Failed to write cache file: {e}")
+            logger.warning("Failed to write cache file: %s", e)
 
     def search_company(self) -> list[dict]:
         """Search for companies matching the provided keywords.
@@ -294,8 +299,7 @@ class HandelsRegister:
         if not self.args.force:
             cache_entry = self._load_from_cache(query, options)
             if cache_entry is not None:
-                if not self.args.json:
-                    print(f"return cached content for {query}")
+                logger.info("Returning cached content for query: %s", query)
                 return get_companies_in_searchresults(cache_entry.html)
         
         # Fetch fresh data
@@ -314,8 +318,7 @@ class HandelsRegister:
         except urllib.error.URLError as e:
             raise NetworkError(f"Failed to submit navigation form: {e.reason}", original_error=e) from e
 
-        if self.args.debug:
-            print(self.browser.title())
+        logger.debug("Page title after navigation: %s", self.browser.title())
 
         try:
             self.browser.select_form(name="form")
@@ -332,8 +335,7 @@ class HandelsRegister:
         except urllib.error.URLError as e:
             raise NetworkError(f"Failed to submit search form: {e.reason}", original_error=e) from e
 
-        if self.args.debug:
-            print(self.browser.title())
+        logger.debug("Page title after search: %s", self.browser.title())
 
         html = response_result.read().decode("utf-8")
         
@@ -486,13 +488,21 @@ def parse_args() -> argparse.Namespace:
                         )
     args = parser.parse_args()
 
-
-    # Enable debugging if wanted
-    if args.debug == True:
-        import logging
-        logger = logging.getLogger("mechanize")
-        logger.addHandler(logging.StreamHandler(sys.stdout))
-        logger.setLevel(logging.DEBUG)
+    # Configure logging based on debug flag
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            stream=sys.stdout
+        )
+        # Also enable mechanize debug logging
+        mechanize_logger = logging.getLogger("mechanize")
+        mechanize_logger.setLevel(logging.DEBUG)
+    else:
+        logging.basicConfig(
+            level=logging.WARNING,
+            format='%(levelname)s: %(message)s'
+        )
 
     return args
 
