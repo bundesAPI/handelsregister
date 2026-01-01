@@ -256,20 +256,83 @@ poetry run python -m pytest
 
 ### Command-line Interface
 
-Das CLI ist _work in progress_ und 
-
 ```
-usage: handelsregister.py [-h] [-d] [-f] -s SCHLAGWOERTER [-so {all,min,exact}]
+usage: handelsregister.py [-h] [-d] [-f] [-j] -s KEYWORDS [-so OPTION]
+                          [--states CODES] [--register-type TYPE]
+                          [--register-number NUMBER] [--include-deleted]
+                          [--similar-sounding] [--results-per-page N]
 
-A handelsregister CLI
+A handelsregister CLI for the German commercial register
 
 options:
   -h, --help            show this help message and exit
   -d, --debug           Enable debug mode and activate logging
   -f, --force           Force a fresh pull and skip the cache
-  -s SCHLAGWOERTER, --schlagwoerter SCHLAGWOERTER
-                        Search for the provided keywords
-  -so {all,min,exact}, --schlagwortOptionen {all,min,exact}
-                        Keyword options: all=contain all keywords; min=contain at least one
-                        keyword; exact=contain the exact company name.
+  -j, --json            Return response as JSON
+
+Search parameters:
+  -s KEYWORDS, --schlagwoerter KEYWORDS
+                        Search for the provided keywords (required)
+  -so OPTION, --schlagwortOptionen OPTION
+                        Keyword matching: all=all keywords; min=at least one; exact=exact name
+  --states CODES        Comma-separated list of state codes to filter by (e.g., BE,BY,HH)
+  --register-type TYPE  Filter by register type (HRA, HRB, GnR, PR, VR)
+  --register-number NUMBER
+                        Search for a specific register number
+  --include-deleted     Include deleted/historical entries in results
+  --similar-sounding    Use phonetic/similarity search (Kölner Phonetik)
+  --results-per-page N  Number of results per page (10, 25, 50, 100)
+```
+
+#### State Codes
+
+| Code | State |
+|------|-------|
+| BW | Baden-Württemberg |
+| BY | Bayern |
+| BE | Berlin |
+| BR | Brandenburg |
+| HB | Bremen |
+| HH | Hamburg |
+| HE | Hessen |
+| MV | Mecklenburg-Vorpommern |
+| NI | Niedersachsen |
+| NW | Nordrhein-Westfalen |
+| RP | Rheinland-Pfalz |
+| SL | Saarland |
+| SN | Sachsen |
+| ST | Sachsen-Anhalt |
+| SH | Schleswig-Holstein |
+| TH | Thüringen |
+
+#### Examples
+
+```bash
+# Basic search
+poetry run python handelsregister.py -s "Deutsche Bahn" -so all
+
+# Search with JSON output
+poetry run python handelsregister.py -s "GASAG AG" -so exact --json
+
+# Filter by state and register type
+poetry run python handelsregister.py -s "Bank" --states BE,HH --register-type HRB
+
+# Include deleted entries with phonetic search
+poetry run python handelsregister.py -s "Mueller" --include-deleted --similar-sounding
+
+# Force fresh data (skip cache)
+poetry run python handelsregister.py -s "Volkswagen" -f --debug
+```
+
+### Running Tests
+
+```bash
+# Run unit tests only (fast, no network access required)
+poetry run pytest
+
+# Run all tests including integration tests (hits live API)
+poetry run pytest -m integration
+
+# Run with verbose output
+poetry run pytest -v
 ```
