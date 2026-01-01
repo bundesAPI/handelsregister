@@ -1740,6 +1740,22 @@ State codes: {state_codes_help}
         metavar="N"
     )
     
+    # Detail options
+    detail_group = parser.add_argument_group('Detail options')
+    detail_group.add_argument(
+        "--details",
+        help="Fetch detailed information for each company result",
+        action="store_true"
+    )
+    detail_group.add_argument(
+        "--detail-type",
+        dest="detail_type",
+        help="Type of details to fetch: SI=structured, AD=printout, UT=owners",
+        choices=["SI", "AD", "UT"],
+        default="SI",
+        metavar="TYPE"
+    )
+    
     args = parser.parse_args()
     
     # Configure logging based on debug flag
@@ -1917,6 +1933,50 @@ def get_details(
     return hr.get_company_details(company, detail_type, force_refresh)
 
 
+def pr_company_details(details: CompanyDetails) -> None:
+    """Print detailed company information to stdout.
+    
+    Args:
+        details: CompanyDetails object with all information.
+    """
+    print(f"{'='*60}")
+    print(f"Firma: {details.name}")
+    print(f"Registernummer: {details.register_num}")
+    print(f"Gericht: {details.court}")
+    print(f"Bundesland: {details.state}")
+    print(f"Status: {details.status}")
+    
+    if details.legal_form:
+        print(f"Rechtsform: {details.legal_form}")
+    
+    if details.capital:
+        currency = details.currency or "EUR"
+        print(f"Kapital: {details.capital} {currency}")
+    
+    if details.address:
+        print(f"Adresse: {details.address}")
+    
+    if details.purpose:
+        print(f"Gegenstand: {details.purpose[:100]}{'...' if len(details.purpose) > 100 else ''}")
+    
+    if details.representatives:
+        print("Vertretung:")
+        for rep in details.representatives:
+            loc = f" ({rep.location})" if rep.location else ""
+            print(f"  - {rep.role}: {rep.name}{loc}")
+    
+    if details.owners:
+        print("Gesellschafter:")
+        for owner in details.owners:
+            share = f" - {owner.share}" if owner.share else ""
+            print(f"  - {owner.name}{share}")
+    
+    if details.registration_date:
+        print(f"Eingetragen: {details.registration_date}")
+    
+    print()
+
+
 def main() -> int:
     """Main entry point for the CLI.
     
@@ -1929,14 +1989,38 @@ def main() -> int:
     try:
         hr = HandelsRegister(args)
         hr.open_startpage()
-        companies = hr.search_company()
         
-        if companies:
-            if args.json:
-                print(json.dumps(companies))
-            else:
-                for c in companies:
-                    pr_company_info(c)
+        # Check if we should fetch details
+        fetch_details = getattr(args, 'details', False)
+        detail_type = getattr(args, 'detail_type', 'SI')
+        
+        if fetch_details:
+            # Build search options
+            search_opts = hr._build_search_options()
+            companies_details = hr.search_with_details(
+                search_opts,
+                fetch_details=True,
+                detail_type=detail_type,
+                force_refresh=getattr(args, 'force', False),
+            )
+            
+            if companies_details:
+                if args.json:
+                    print(json.dumps([d.to_dict() for d in companies_details]))
+                else:
+                    for details in companies_details:
+                        pr_company_details(details)
+        else:
+            # Standard search without details
+            companies = hr.search_company()
+            
+            if companies:
+                if args.json:
+                    print(json.dumps(companies))
+                else:
+                    for c in companies:
+                        pr_company_info(c)
+        
         return 0
         
     except NetworkError as e:
