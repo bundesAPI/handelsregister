@@ -1,6 +1,8 @@
-# Handelsregister CLI
+# Handelsregister
 
-Eine Kommandozeilen-Schnittstelle für das gemeinsame Registerportal der deutschen Bundesländer.
+Python-Package für das gemeinsame Registerportal der deutschen Bundesländer.
+
+Nutzbar als **Kommandozeilen-Tool** oder als **Library** in eigenen Anwendungen.
 
 ## Rechtliche Hinweise
 
@@ -20,7 +22,75 @@ cd handelsregister
 poetry install
 ```
 
-## Verwendung
+## Verwendung als Library
+
+### Einfache API
+
+```python
+from handelsregister import search
+
+# Einfache Suche
+unternehmen = search("Deutsche Bahn")
+
+# Mit Optionen
+banken = search(
+    keywords="Bank",
+    states=["BE", "HH"],           # Nur Berlin und Hamburg
+    register_type="HRB",            # Nur HRB-Einträge
+    include_deleted=False,          # Keine gelöschten
+)
+
+# Ergebnisse verarbeiten
+for firma in banken:
+    print(f"{firma['name']} - {firma['register_num']}")
+    print(f"  Gericht: {firma['court']}")
+    print(f"  Status: {firma['status']}")
+```
+
+### Erweiterte API
+
+Für mehr Kontrolle kann die `HandelsRegister`-Klasse direkt verwendet werden:
+
+```python
+from handelsregister import HandelsRegister, SearchOptions, SearchCache
+
+# Mit SearchOptions
+options = SearchOptions(
+    keywords="Energie",
+    keyword_option="all",
+    states=["BY", "BW"],
+    register_type="HRB",
+    similar_sounding=True,      # Phonetische Suche
+    results_per_page=100,
+)
+
+hr = HandelsRegister(debug=False)
+hr.open_startpage()
+ergebnisse = hr.search_with_options(options)
+
+# Mit eigenem Cache
+cache = SearchCache(ttl_seconds=7200)  # 2 Stunden TTL
+hr = HandelsRegister(cache=cache)
+```
+
+### Rückgabeformat
+
+Jedes Unternehmen wird als Dictionary zurückgegeben:
+
+```python
+{
+    'name': 'GASAG AG',
+    'court': 'Berlin District court Berlin (Charlottenburg) HRB 44343',
+    'register_num': 'HRB 44343 B',
+    'state': 'Berlin',
+    'status': 'currently registered',
+    'statusCurrent': 'CURRENTLY_REGISTERED',
+    'documents': 'ADCDHDDKUTVÖSI',
+    'history': [('Alter Firmenname', 'Berlin')]
+}
+```
+
+## Verwendung als CLI
 
 ### Kommandozeilen-Schnittstelle
 
