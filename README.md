@@ -14,12 +14,18 @@ Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumen
 
 ## Installation
 
-Installation und Ausführung mit [Poetry](https://python-poetry.org/):
+Installation mit [uv](https://docs.astral.sh/uv/) (empfohlen):
 
 ```bash
 git clone https://github.com/bundesAPI/handelsregister.git
 cd handelsregister
-poetry install
+uv sync
+```
+
+Alternativ mit pip:
+
+```bash
+pip install git+https://github.com/bundesAPI/handelsregister.git
 ```
 
 ## Verwendung als Library
@@ -143,32 +149,32 @@ Suchparameter:
 
 ```bash
 # Einfache Suche
-poetry run python handelsregister.py -s "Deutsche Bahn" -so all
+uv run handelsregister -s "Deutsche Bahn" -so all
 
 # Suche mit JSON-Ausgabe
-poetry run python handelsregister.py -s "GASAG AG" -so exact --json
+uv run handelsregister -s "GASAG AG" -so exact --json
 
 # Nach Bundesland und Registerart filtern
-poetry run python handelsregister.py -s "Bank" --states BE,HH --register-type HRB
+uv run handelsregister -s "Bank" --states BE,HH --register-type HRB
 
 # Gelöschte Einträge mit phonetischer Suche
-poetry run python handelsregister.py -s "Mueller" --include-deleted --similar-sounding
+uv run handelsregister -s "Mueller" --include-deleted --similar-sounding
 
 # Cache ignorieren (neue Daten abrufen)
-poetry run python handelsregister.py -s "Volkswagen" -f --debug
+uv run handelsregister -s "Volkswagen" -f --debug
 ```
 
 ## Tests
 
 ```bash
 # Unit-Tests ausführen (schnell, ohne Netzwerkzugriff)
-poetry run pytest
+uv run pytest
 
 # Alle Tests inkl. Integrationstests (greift auf Live-API zu)
-poetry run pytest -m integration
+uv run pytest -m integration
 
 # Mit ausführlicher Ausgabe
-poetry run pytest -v
+uv run pytest -v
 ```
 
 ## API-Parameter
