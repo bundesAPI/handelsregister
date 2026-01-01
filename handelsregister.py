@@ -57,6 +57,32 @@ SUFFIX_MAP: dict[str, dict[str, str]] = {
     'Bremen': {'HRA': ' HB', 'HRB': ' HB', 'GnR': ' HB', 'VR': ' HB', 'PR': ' HB'}
 }
 
+# German state codes for filtering (bundesland parameters)
+STATE_CODES: dict[str, str] = {
+    'BW': 'Baden-Württemberg',
+    'BY': 'Bayern',
+    'BE': 'Berlin',
+    'BR': 'Brandenburg',
+    'HB': 'Bremen',
+    'HH': 'Hamburg',
+    'HE': 'Hessen',
+    'MV': 'Mecklenburg-Vorpommern',
+    'NI': 'Niedersachsen',
+    'NW': 'Nordrhein-Westfalen',
+    'RP': 'Rheinland-Pfalz',
+    'SL': 'Saarland',
+    'SN': 'Sachsen',
+    'ST': 'Sachsen-Anhalt',
+    'SH': 'Schleswig-Holstein',
+    'TH': 'Thüringen',
+}
+
+# Register types
+REGISTER_TYPES: list[str] = ['HRA', 'HRB', 'GnR', 'PR', 'VR']
+
+# Results per page options
+RESULTS_PER_PAGE_OPTIONS: list[int] = [10, 25, 50, 100]
+
 # For backward compatibility
 schlagwortOptionen = KEYWORD_OPTIONS
 
@@ -135,6 +161,44 @@ class CacheEntry:
             timestamp=data['timestamp'],
             html=data['html']
         )
+
+
+@dataclass
+class SearchOptions:
+    """Encapsulates all search parameters for the Handelsregister.
+    
+    Attributes:
+        keywords: Search keywords (schlagwoerter).
+        keyword_option: How to match keywords (all, min, exact).
+        states: List of state codes to filter by (e.g., ['BE', 'HH']).
+        register_type: Register type filter (HRA, HRB, GnR, PR, VR).
+        register_number: Specific register number to search for.
+        include_deleted: Include deleted/historical entries.
+        similar_sounding: Use phonetic/similarity search.
+        results_per_page: Number of results per page (10, 25, 50, 100).
+    """
+    keywords: str
+    keyword_option: str = "all"
+    states: Optional[list[str]] = None
+    register_type: Optional[str] = None
+    register_number: Optional[str] = None
+    include_deleted: bool = False
+    similar_sounding: bool = False
+    results_per_page: int = 100
+    
+    def cache_key(self) -> str:
+        """Generate a unique key for caching based on all options."""
+        parts = [
+            self.keywords,
+            self.keyword_option,
+            ",".join(sorted(self.states or [])),
+            self.register_type or "",
+            self.register_number or "",
+            str(self.include_deleted),
+            str(self.similar_sounding),
+            str(self.results_per_page),
+        ]
+        return "|".join(parts)
 
 
 @dataclass
@@ -494,6 +558,28 @@ class HandelsRegister:
                 original_error=e
             ) from e
     
+    def _build_search_options(self) -> SearchOptions:
+        """Build SearchOptions from command-line arguments.
+        
+        Returns:
+            SearchOptions instance with all search parameters.
+        """
+        # Parse state codes if provided
+        states = None
+        if hasattr(self.args, 'states') and self.args.states:
+            states = [s.strip().upper() for s in self.args.states.split(',')]
+        
+        return SearchOptions(
+            keywords=self.args.schlagwoerter,
+            keyword_option=self.args.schlagwortOptionen,
+            states=states,
+            register_type=getattr(self.args, 'register_type', None),
+            register_number=getattr(self.args, 'register_number', None),
+            include_deleted=getattr(self.args, 'include_deleted', False),
+            similar_sounding=getattr(self.args, 'similar_sounding', False),
+            results_per_page=getattr(self.args, 'results_per_page', 100),
+        )
+    
     def search_company(self) -> list[dict]:
         """Search for companies matching the provided keywords.
         
@@ -505,30 +591,29 @@ class HandelsRegister:
             FormError: If form selection or submission fails.
             ParseError: If HTML parsing fails.
         """
-        query = self.args.schlagwoerter
-        options = self.args.schlagwortOptionen
+        search_opts = self._build_search_options()
+        cache_key = search_opts.cache_key()
         
-        # Try to load from cache
+        # Try to load from cache (use cache_key as both query and options for simplicity)
         if not self.args.force:
-            cached_html = self.cache.get(query, options)
+            cached_html = self.cache.get(cache_key, "")
             if cached_html is not None:
-                logger.info("Returning cached content for query: %s", query)
+                logger.info("Returning cached content for query: %s", search_opts.keywords)
                 return ResultParser.parse_search_results(cached_html)
         
         # Fetch fresh data from website
-        html = self._fetch_search_results(query, options)
+        html = self._fetch_search_results(search_opts)
         
         # Save to cache
-        self.cache.set(query, options, html)
+        self.cache.set(cache_key, "", html)
         
         return ResultParser.parse_search_results(html)
     
-    def _fetch_search_results(self, query: str, options: str) -> str:
+    def _fetch_search_results(self, search_opts: SearchOptions) -> str:
         """Fetch search results from the website.
         
         Args:
-            query: Search keywords.
-            options: Search option (all, min, exact).
+            search_opts: Search options specifying all search parameters.
             
         Returns:
             HTML content of search results page.
@@ -541,7 +626,7 @@ class HandelsRegister:
         self._navigate_to_search()
         
         # Submit search form
-        return self._submit_search(query, options)
+        return self._submit_search(search_opts)
     
     def _navigate_to_search(self) -> None:
         """Navigate from start page to extended search form.
@@ -574,12 +659,11 @@ class HandelsRegister:
         
         logger.debug("Page title after navigation: %s", self.browser.title())
     
-    def _submit_search(self, query: str, options: str) -> str:
+    def _submit_search(self, search_opts: SearchOptions) -> str:
         """Submit the search form and return results HTML.
         
         Args:
-            query: Search keywords.
-            options: Search option (all, min, exact).
+            search_opts: Search options specifying all search parameters.
             
         Returns:
             HTML content of search results page.
@@ -595,9 +679,61 @@ class HandelsRegister:
                 f"Search form not found. The website structure may have changed: {e}"
             ) from e
         
-        self.browser["form:schlagwoerter"] = query
-        option_id = KEYWORD_OPTIONS.get(options)
+        # Required: Keywords
+        self.browser["form:schlagwoerter"] = search_opts.keywords
+        option_id = KEYWORD_OPTIONS.get(search_opts.keyword_option)
         self.browser["form:schlagwortOptionen"] = [str(option_id)]
+        
+        # Optional: State filtering
+        if search_opts.states:
+            for state_code in search_opts.states:
+                if state_code in STATE_CODES:
+                    try:
+                        control_name = f"form:bundesland{state_code}"
+                        self.browser.form.find_control(control_name).value = ["on"]
+                        logger.debug("Enabled state filter: %s", state_code)
+                    except mechanize.ControlNotFoundError:
+                        logger.warning("State control not found: %s", control_name)
+        
+        # Optional: Register type
+        if search_opts.register_type:
+            try:
+                self.browser["form:registerArt"] = [search_opts.register_type]
+                logger.debug("Set register type: %s", search_opts.register_type)
+            except mechanize.ControlNotFoundError:
+                logger.warning("Register type control not found")
+        
+        # Optional: Register number
+        if search_opts.register_number:
+            try:
+                self.browser["form:registerNummer"] = search_opts.register_number
+                logger.debug("Set register number: %s", search_opts.register_number)
+            except mechanize.ControlNotFoundError:
+                logger.warning("Register number control not found")
+        
+        # Optional: Include deleted entries
+        if search_opts.include_deleted:
+            try:
+                self.browser.form.find_control("form:suchOptionenGeloescht").value = ["true"]
+                logger.debug("Enabled include deleted option")
+            except mechanize.ControlNotFoundError:
+                logger.warning("Include deleted control not found")
+        
+        # Optional: Similar sounding (phonetic search)
+        if search_opts.similar_sounding:
+            try:
+                self.browser.form.find_control("form:suchOptionenAehnlich").value = ["true"]
+                logger.debug("Enabled similar sounding option")
+            except mechanize.ControlNotFoundError:
+                logger.warning("Similar sounding control not found")
+        
+        # Optional: Results per page
+        if search_opts.results_per_page in RESULTS_PER_PAGE_OPTIONS:
+            try:
+                self.browser["form:ergebnisseProSeite"] = [str(search_opts.results_per_page)]
+                logger.debug("Set results per page: %d", search_opts.results_per_page)
+            except mechanize.ControlNotFoundError:
+                logger.warning("Results per page control not found")
         
         try:
             response = self.browser.submit()
@@ -655,17 +791,23 @@ def parse_args() -> argparse.Namespace:
     Returns:
         Parsed arguments namespace.
     """
+    state_codes_help = ", ".join(f"{k}={v}" for k, v in sorted(STATE_CODES.items()))
+    
     parser = argparse.ArgumentParser(
-        description='A handelsregister CLI',
+        description='A handelsregister CLI for the German commercial register',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Examples:
   %(prog)s -s "Deutsche Bahn" -so all
   %(prog)s -s "GASAG AG" -so exact --json
-  %(prog)s -s "Munich" -f --debug
+  %(prog)s -s "Munich" --states BE,BY --register-type HRB
+  %(prog)s -s "Bank" --include-deleted --similar-sounding
+
+State codes: {state_codes_help}
         """
     )
     
+    # General options
     parser.add_argument(
         "-d", "--debug",
         help="Enable debug mode and activate logging",
@@ -677,22 +819,64 @@ Examples:
         action="store_true"
     )
     parser.add_argument(
+        "-j", "--json",
+        help="Return response as JSON",
+        action="store_true"
+    )
+    
+    # Search parameters
+    search_group = parser.add_argument_group('Search parameters')
+    search_group.add_argument(
         "-s", "--schlagwoerter",
-        help="Search for the provided keywords",
+        help="Search for the provided keywords (required)",
         required=True,
         metavar="KEYWORDS"
     )
-    parser.add_argument(
+    search_group.add_argument(
         "-so", "--schlagwortOptionen",
-        help="Keyword options: all=contain all keywords; min=contain at least one; exact=exact name",
+        help="Keyword matching: all=all keywords; min=at least one; exact=exact name",
         choices=["all", "min", "exact"],
         default="all",
         metavar="OPTION"
     )
-    parser.add_argument(
-        "-j", "--json",
-        help="Return response as JSON",
+    search_group.add_argument(
+        "--states",
+        help="Comma-separated list of state codes to filter by (e.g., BE,BY,HH)",
+        metavar="CODES"
+    )
+    search_group.add_argument(
+        "--register-type",
+        dest="register_type",
+        help="Filter by register type",
+        choices=REGISTER_TYPES,
+        metavar="TYPE"
+    )
+    search_group.add_argument(
+        "--register-number",
+        dest="register_number",
+        help="Search for a specific register number",
+        metavar="NUMBER"
+    )
+    search_group.add_argument(
+        "--include-deleted",
+        dest="include_deleted",
+        help="Include deleted/historical entries in results",
         action="store_true"
+    )
+    search_group.add_argument(
+        "--similar-sounding",
+        dest="similar_sounding",
+        help="Use phonetic/similarity search (Kölner Phonetik)",
+        action="store_true"
+    )
+    search_group.add_argument(
+        "--results-per-page",
+        dest="results_per_page",
+        help="Number of results per page",
+        type=int,
+        choices=RESULTS_PER_PAGE_OPTIONS,
+        default=100,
+        metavar="N"
     )
     
     args = parser.parse_args()

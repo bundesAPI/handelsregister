@@ -21,9 +21,12 @@ from handelsregister import (
     ParseError,
     ResultParser,
     SearchCache,
+    SearchOptions,
     get_companies_in_searchresults,
     parse_result,
     SUFFIX_MAP,
+    STATE_CODES,
+    REGISTER_TYPES,
     DEFAULT_CACHE_TTL_SECONDS,
 )
 
@@ -163,6 +166,52 @@ class TestDataClasses:
         assert restored.options == original.options
         assert restored.timestamp == original.timestamp
         assert restored.html == original.html
+
+    def test_search_options_cache_key(self):
+        """Test SearchOptions.cache_key() generates unique keys."""
+        opts1 = SearchOptions(keywords="test", keyword_option="all")
+        opts2 = SearchOptions(keywords="test", keyword_option="all")
+        opts3 = SearchOptions(keywords="test", keyword_option="exact")
+        opts4 = SearchOptions(keywords="test", keyword_option="all", states=["BE"])
+        
+        assert opts1.cache_key() == opts2.cache_key()
+        assert opts1.cache_key() != opts3.cache_key()
+        assert opts1.cache_key() != opts4.cache_key()
+
+    def test_search_options_defaults(self):
+        """Test SearchOptions default values."""
+        opts = SearchOptions(keywords="test")
+        
+        assert opts.keyword_option == "all"
+        assert opts.states is None
+        assert opts.register_type is None
+        assert opts.register_number is None
+        assert opts.include_deleted is False
+        assert opts.similar_sounding is False
+        assert opts.results_per_page == 100
+
+
+# =============================================================================
+# Unit Tests - Configuration
+# =============================================================================
+
+class TestConfiguration:
+    """Unit tests for configuration constants."""
+
+    def test_state_codes_complete(self):
+        """Test that all 16 German states are defined."""
+        assert len(STATE_CODES) == 16
+        assert 'BE' in STATE_CODES  # Berlin
+        assert 'BY' in STATE_CODES  # Bayern
+        assert 'NW' in STATE_CODES  # Nordrhein-Westfalen
+
+    def test_register_types(self):
+        """Test that all register types are defined."""
+        assert 'HRA' in REGISTER_TYPES
+        assert 'HRB' in REGISTER_TYPES
+        assert 'GnR' in REGISTER_TYPES
+        assert 'VR' in REGISTER_TYPES
+        assert 'PR' in REGISTER_TYPES
 
 
 # =============================================================================
