@@ -79,9 +79,40 @@ cache = SearchCache(ttl_seconds=7200)  # 2 Stunden TTL
 hr = HandelsRegister(cache=cache)
 ```
 
+### Detailabruf
+
+Zu Suchergebnissen können erweiterte Unternehmensinformationen abgerufen werden:
+
+```python
+from handelsregister import search, get_details
+
+# Erst suchen
+unternehmen = search("GASAG AG", keyword_option="exact")
+
+# Dann Details abrufen
+if unternehmen:
+    details = get_details(unternehmen[0], detail_type="SI")
+    
+    print(f"Firma: {details.name}")
+    print(f"Rechtsform: {details.legal_form}")
+    print(f"Kapital: {details.capital} {details.currency}")
+    print(f"Adresse: {details.address}")
+    
+    for gf in details.representatives:
+        print(f"  {gf.role}: {gf.name}")
+```
+
+**Verfügbare Detail-Typen:**
+
+| Typ | Beschreibung |
+|-----|--------------|
+| `SI` | Strukturierter Registerinhalt (empfohlen, maschinenlesbar) |
+| `AD` | Aktueller Abdruck (formatierter Text) |
+| `UT` | Unternehmensträger (Gesellschafter/Inhaber) |
+
 ### Rückgabeformat
 
-Jedes Unternehmen wird als Dictionary zurückgegeben:
+**Suchergebnisse** werden als Dictionary zurückgegeben:
 
 ```python
 {
@@ -96,6 +127,35 @@ Jedes Unternehmen wird als Dictionary zurückgegeben:
 }
 ```
 
+**CompanyDetails** enthält erweiterte Informationen:
+
+```python
+{
+    'name': 'GASAG AG',
+    'register_num': 'HRB 44343 B',
+    'court': 'Amtsgericht Berlin (Charlottenburg)',
+    'state': 'Berlin',
+    'status': 'aktuell',
+    'legal_form': 'Aktiengesellschaft',
+    'capital': '307.200.000',
+    'currency': 'EUR',
+    'address': {
+        'street': 'GASAG-Platz 1',
+        'postal_code': '10965',
+        'city': 'Berlin',
+        'country': 'Deutschland'
+    },
+    'purpose': 'Versorgung mit Energie...',
+    'representatives': [
+        {'name': 'Dr. Max Mustermann', 'role': 'Vorstand', 'location': 'Berlin'}
+    ],
+    'owners': [],
+    'registration_date': '01.01.1990',
+    'last_update': None,
+    'deletion_date': None
+}
+```
+
 ## Verwendung als CLI
 
 ### Kommandozeilen-Schnittstelle
@@ -105,6 +165,7 @@ handelsregister.py [-h] [-d] [-f] [-j] -s SCHLAGWÖRTER [-so OPTION]
                    [--states CODES] [--register-type TYP]
                    [--register-number NUMMER] [--include-deleted]
                    [--similar-sounding] [--results-per-page N]
+                   [--details] [--detail-type TYP]
 
 Optionen:
   -h, --help            Hilfe anzeigen
@@ -122,6 +183,10 @@ Suchparameter:
   --include-deleted     Auch gelöschte Einträge anzeigen
   --similar-sounding    Phonetische Suche (Kölner Phonetik)
   --results-per-page N  Ergebnisse pro Seite (10, 25, 50, 100)
+
+Detailoptionen:
+  --details             Erweiterte Unternehmensinfos abrufen
+  --detail-type TYP     Art der Details: SI=strukturiert, AD=Abdruck, UT=Inhaber
 ```
 
 ### Bundesland-Codes
@@ -162,6 +227,15 @@ uv run handelsregister -s "Mueller" --include-deleted --similar-sounding
 
 # Cache ignorieren (neue Daten abrufen)
 uv run handelsregister -s "Volkswagen" -f --debug
+
+# Mit Detailabruf (Geschäftsführer, Kapital, Adresse)
+uv run handelsregister -s "GASAG AG" --details
+
+# Details als JSON (für Weiterverarbeitung)
+uv run handelsregister -s "GASAG AG" --details --json
+
+# Spezifischer Detail-Typ (Unternehmensträger)
+uv run handelsregister -s "Test GmbH" --details --detail-type UT
 ```
 
 ## Tests
