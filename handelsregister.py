@@ -899,6 +899,94 @@ State codes: {state_codes_help}
     return args
 
 
+# =============================================================================
+# Public API
+# =============================================================================
+
+def search(
+    keywords: str,
+    keyword_option: str = "all",
+    states: Optional[list[str]] = None,
+    register_type: Optional[str] = None,
+    register_number: Optional[str] = None,
+    include_deleted: bool = False,
+    similar_sounding: bool = False,
+    results_per_page: int = 100,
+    force_refresh: bool = False,
+    debug: bool = False,
+) -> list[dict]:
+    """Durchsucht das Handelsregister nach Unternehmen.
+    
+    Dies ist die Haupt-API für die programmatische Nutzung des Packages.
+    
+    Args:
+        keywords: Suchbegriffe (erforderlich).
+        keyword_option: Suchmodus - "all" (alle Begriffe), "min" (mindestens einer), 
+                       "exact" (exakter Firmenname). Standard: "all".
+        states: Liste von Bundesland-Codes zum Filtern (z.B. ["BE", "BY", "HH"]).
+        register_type: Registerart-Filter (HRA, HRB, GnR, PR, VR).
+        register_number: Spezifische Registernummer suchen.
+        include_deleted: Auch gelöschte Einträge anzeigen.
+        similar_sounding: Phonetische Suche (Kölner Phonetik) verwenden.
+        results_per_page: Ergebnisse pro Seite (10, 25, 50, 100). Standard: 100.
+        force_refresh: Cache ignorieren und neue Daten abrufen.
+        debug: Debug-Logging aktivieren.
+        
+    Returns:
+        Liste von Dictionaries mit Unternehmensdaten. Jedes Dictionary enthält:
+        - name: Firmenname
+        - court: Registergericht
+        - register_num: Registernummer (z.B. "HRB 12345 B")
+        - state: Bundesland
+        - status: Aktueller Status
+        - statusCurrent: Normalisierter Status (z.B. "CURRENTLY_REGISTERED")
+        - documents: Verfügbare Dokumente
+        - history: Liste von (Name, Ort) Tupeln mit historischen Einträgen
+        
+    Raises:
+        NetworkError: Bei Netzwerkfehlern.
+        FormError: Wenn die Website-Struktur sich geändert hat.
+        ParseError: Bei Fehlern beim Parsen der Ergebnisse.
+        
+    Beispiel:
+        >>> from handelsregister import search
+        >>> 
+        >>> # Einfache Suche
+        >>> companies = search("Deutsche Bahn")
+        >>> 
+        >>> # Mit Filtern
+        >>> banks = search("Bank", states=["BE", "HH"], register_type="HRB")
+        >>> 
+        >>> for company in banks:
+        ...     print(f"{company['name']} - {company['register_num']}")
+    """
+    # Configure logging if debug mode
+    if debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    
+    # Build args namespace for HandelsRegister
+    args = argparse.Namespace(
+        debug=debug,
+        force=force_refresh,
+        json=False,
+        schlagwoerter=keywords,
+        schlagwortOptionen=keyword_option,
+        states=",".join(states) if states else None,
+        register_type=register_type,
+        register_number=register_number,
+        include_deleted=include_deleted,
+        similar_sounding=similar_sounding,
+        results_per_page=results_per_page,
+    )
+    
+    hr = HandelsRegister(args)
+    hr.open_startpage()
+    return hr.search_company()
+
+
 def main() -> int:
     """Main entry point for the CLI.
     
