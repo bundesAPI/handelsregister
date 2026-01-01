@@ -4,18 +4,23 @@ verify_ssl = true
 name = "pypi"
 
 [tool.poetry.dependencies]
-python = ">3.6.2,<4"
-mechanize = "*"
-mechanicalsoup = "*"
+python = ">=3.9,<4"
+mechanize = ">=0.4.8"
+beautifulsoup4 = ">=4.11.0"
 
 [tool.poetry.dev-dependencies]
-black = "^22.6.0"
+black = ">=22.6.0"
+pytest = ">=7.0.0"
 
 [tool.poetry]
 name = "handelsregister"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "CLI for the German Handelsregister (commercial register) portal"
 authors = ["BundesAPI <kontakt@bund.dev>"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/bundesAPI/handelsregister"
+keywords = ["handelsregister", "germany", "commercial-register", "cli"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -24,7 +29,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py36,py37,py38,py310
+envlist = py39,py310,py311,py312
 isolated_build = True
 
 [tox:.package]
