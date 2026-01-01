@@ -480,26 +480,61 @@ def get_companies_in_searchresults(html: str) -> list[dict]:
 # =============================================================================
 
 class HandelsRegister:
-    """Browser automation for searching the Handelsregister website.
+    """Browser-Automatisierung für die Handelsregister-Suche.
     
-    This class handles all interaction with the Handelsregister website,
-    including navigation, form submission, and result retrieval.
+    Diese Klasse verwaltet die Interaktion mit der Handelsregister-Website,
+    einschließlich Navigation, Formular-Übermittlung und Ergebnis-Abruf.
+    
+    Beispiel (programmatische Nutzung):
+        >>> hr = HandelsRegister(debug=False)
+        >>> hr.open_startpage()
+        >>> results = hr.search("Deutsche Bahn", keyword_option="all")
+        
+    Beispiel (mit SearchOptions):
+        >>> opts = SearchOptions(keywords="Bank", states=["BE", "HH"])
+        >>> hr = HandelsRegister()
+        >>> hr.open_startpage()
+        >>> results = hr.search_with_options(opts)
     """
     
     def __init__(
-        self, 
-        args: argparse.Namespace,
-        cache: Optional[SearchCache] = None
+        self,
+        args: Optional[argparse.Namespace] = None,
+        cache: Optional[SearchCache] = None,
+        debug: bool = False,
     ) -> None:
-        """Initialize the HandelsRegister client.
+        """Initialisiert den HandelsRegister-Client.
         
         Args:
-            args: Command-line arguments namespace.
-            cache: Optional cache instance. Created automatically if not provided.
+            args: CLI-Argumente (optional, für Rückwärtskompatibilität).
+            cache: Cache-Instanz (optional, wird automatisch erstellt).
+            debug: Debug-Logging aktivieren.
         """
         self.args = args
         self.cache = cache or SearchCache()
-        self.browser = self._create_browser(debug=args.debug)
+        self._debug = debug if args is None else getattr(args, 'debug', False)
+        self.browser = self._create_browser(debug=self._debug)
+    
+    @classmethod
+    def from_options(
+        cls,
+        options: SearchOptions,
+        cache: Optional[SearchCache] = None,
+        debug: bool = False,
+    ) -> 'HandelsRegister':
+        """Erstellt einen Client mit SearchOptions.
+        
+        Args:
+            options: Suchoptionen.
+            cache: Cache-Instanz (optional).
+            debug: Debug-Logging aktivieren.
+            
+        Returns:
+            Konfigurierte HandelsRegister-Instanz.
+        """
+        instance = cls(args=None, cache=cache, debug=debug)
+        instance._default_options = options
+        return instance
     
     def _create_browser(self, debug: bool = False) -> mechanize.Browser:
         """Create and configure a mechanize browser instance.
@@ -580,34 +615,61 @@ class HandelsRegister:
             results_per_page=getattr(self.args, 'results_per_page', 100),
         )
     
-    def search_company(self) -> list[dict]:
-        """Search for companies matching the provided keywords.
+    def search_with_options(
+        self,
+        options: SearchOptions,
+        force_refresh: bool = False,
+    ) -> list[dict]:
+        """Führt eine Suche mit SearchOptions durch.
         
+        Args:
+            options: Suchoptionen.
+            force_refresh: Cache ignorieren.
+            
         Returns:
-            A list of dictionaries containing company information.
+            Liste von Dictionaries mit Unternehmensdaten.
             
         Raises:
-            NetworkError: If network requests fail.
-            FormError: If form selection or submission fails.
-            ParseError: If HTML parsing fails.
+            NetworkError: Bei Netzwerkfehlern.
+            FormError: Bei Formular-Problemen.
+            ParseError: Bei Parse-Fehlern.
         """
-        search_opts = self._build_search_options()
-        cache_key = search_opts.cache_key()
+        cache_key = options.cache_key()
         
-        # Try to load from cache (use cache_key as both query and options for simplicity)
-        if not self.args.force:
+        # Try to load from cache
+        if not force_refresh:
             cached_html = self.cache.get(cache_key, "")
             if cached_html is not None:
-                logger.info("Returning cached content for query: %s", search_opts.keywords)
+                logger.info("Cache-Treffer für: %s", options.keywords)
                 return ResultParser.parse_search_results(cached_html)
         
         # Fetch fresh data from website
-        html = self._fetch_search_results(search_opts)
+        html = self._fetch_search_results(options)
         
         # Save to cache
         self.cache.set(cache_key, "", html)
         
         return ResultParser.parse_search_results(html)
+    
+    def search_company(self) -> list[dict]:
+        """Sucht nach Unternehmen basierend auf CLI-Argumenten.
+        
+        Hinweis: Für programmatische Nutzung wird search_with_options() empfohlen.
+        
+        Returns:
+            Liste von Dictionaries mit Unternehmensdaten.
+            
+        Raises:
+            NetworkError: Bei Netzwerkfehlern.
+            FormError: Bei Formular-Problemen.
+            ParseError: Bei Parse-Fehlern.
+        """
+        if self.args is None:
+            raise ValueError("search_company() benötigt args. Nutze search_with_options() stattdessen.")
+        
+        search_opts = self._build_search_options()
+        force_refresh = getattr(self.args, 'force', False)
+        return self.search_with_options(search_opts, force_refresh=force_refresh)
     
     def _fetch_search_results(self, search_opts: SearchOptions) -> str:
         """Fetch search results from the website.
