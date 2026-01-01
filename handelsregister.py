@@ -12,11 +12,43 @@ import mechanize
 import re
 import pathlib
 import sys
+import urllib.error
 from dataclasses import dataclass, field
 from typing import Optional
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 import urllib.parse
+
+
+# Custom Exceptions
+class HandelsregisterError(Exception):
+    """Base exception for all Handelsregister errors."""
+    pass
+
+
+class NetworkError(HandelsregisterError):
+    """Raised when a network request fails."""
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_error = original_error
+
+
+class ParseError(HandelsregisterError):
+    """Raised when HTML parsing fails."""
+    def __init__(self, message: str, html_snippet: Optional[str] = None):
+        super().__init__(message)
+        self.html_snippet = html_snippet
+
+
+class FormError(HandelsregisterError):
+    """Raised when form interaction fails."""
+    pass
+
+
+class CacheError(HandelsregisterError):
+    """Raised when cache operations fail."""
+    pass
+
 
 # Dictionaries to map arguments to values
 schlagwortOptionen: dict[str, int] = {
@@ -92,48 +124,101 @@ class HandelsRegister:
         self.cachedir.mkdir(parents=True, exist_ok=True)
 
     def open_startpage(self) -> None:
-        self.browser.open("https://www.handelsregister.de", timeout=10)
+        """Open the Handelsregister start page.
+        
+        Raises:
+            NetworkError: If the connection fails or times out.
+        """
+        try:
+            self.browser.open("https://www.handelsregister.de", timeout=10)
+        except urllib.error.URLError as e:
+            raise NetworkError(
+                f"Failed to connect to handelsregister.de: {e.reason}",
+                original_error=e
+            ) from e
+        except mechanize.BrowserStateError as e:
+            raise NetworkError(
+                f"Browser state error: {e}",
+                original_error=e
+            ) from e
 
     def companyname2cachename(self, companyname: str) -> pathlib.Path:
         return self.cachedir / companyname
 
     def search_company(self) -> list[dict]:
+        """Search for companies matching the provided keywords.
+        
+        Returns:
+            A list of dictionaries containing company information.
+            
+        Raises:
+            NetworkError: If network requests fail.
+            FormError: If form selection or submission fails.
+            CacheError: If cache read/write operations fail.
+            ParseError: If HTML parsing fails.
+        """
         cachename = self.companyname2cachename(self.args.schlagwoerter)
-        if self.args.force==False and cachename.exists():
-            with open(cachename, "r") as f:
-                html = f.read()
-                if not self.args.json:
-                    print("return cached content for %s" % self.args.schlagwoerter)
+        
+        # Try to load from cache
+        if not self.args.force and cachename.exists():
+            try:
+                with open(cachename, "r", encoding="utf-8") as f:
+                    html = f.read()
+                    if not self.args.json:
+                        print(f"return cached content for {self.args.schlagwoerter}")
+            except OSError as e:
+                raise CacheError(f"Failed to read cache file: {e}") from e
         else:
             # TODO implement token bucket to abide by rate limit
             # Use an atomic counter: https://gist.github.com/benhoyt/8c8a8d62debe8e5aa5340373f9c509c7
-            self.browser.select_form(name="naviForm")
+            try:
+                self.browser.select_form(name="naviForm")
+            except mechanize.FormNotFoundError as e:
+                raise FormError(f"Navigation form not found. The website structure may have changed: {e}") from e
+            
             self.browser.form.new_control('hidden', 'naviForm:erweiterteSucheLink', {'value': 'naviForm:erweiterteSucheLink'})
             self.browser.form.new_control('hidden', 'target', {'value': 'erweiterteSucheLink'})
-            response_search = self.browser.submit()
+            
+            try:
+                self.browser.submit()
+            except urllib.error.URLError as e:
+                raise NetworkError(f"Failed to submit navigation form: {e.reason}", original_error=e) from e
 
-            if self.args.debug == True:
+            if self.args.debug:
                 print(self.browser.title())
 
-            self.browser.select_form(name="form")
+            try:
+                self.browser.select_form(name="form")
+            except mechanize.FormNotFoundError as e:
+                raise FormError(f"Search form not found. The website structure may have changed: {e}") from e
 
             self.browser["form:schlagwoerter"] = self.args.schlagwoerter
             so_id = schlagwortOptionen.get(self.args.schlagwortOptionen)
 
             self.browser["form:schlagwortOptionen"] = [str(so_id)]
 
-            response_result = self.browser.submit()
+            try:
+                response_result = self.browser.submit()
+            except urllib.error.URLError as e:
+                raise NetworkError(f"Failed to submit search form: {e.reason}", original_error=e) from e
 
-            if self.args.debug == True:
+            if self.args.debug:
                 print(self.browser.title())
 
             html = response_result.read().decode("utf-8")
-            with open(cachename, "w") as f:
-                f.write(html)
+            
+            try:
+                with open(cachename, "w", encoding="utf-8") as f:
+                    f.write(html)
+            except OSError as e:
+                # Cache write failure is not critical - log and continue
+                if self.args.debug:
+                    print(f"Warning: Failed to write cache file: {e}")
 
             # TODO catch the situation if there's more than one company?
             # TODO get all documents attached to the exact company
             # TODO parse useful information out of the PDFs
+            
         return get_companies_in_searchresults(html)
 
 
@@ -152,8 +237,17 @@ def parse_result(result: Tag) -> dict:
         
     Returns:
         A dictionary containing company information.
+        
+    Raises:
+        ParseError: If the result row has unexpected structure.
     """
     cells: list[str] = [cell.text.strip() for cell in result.find_all('td')]
+    
+    if len(cells) < 6:
+        raise ParseError(
+            f"Expected at least 6 cells in result row, got {len(cells)}",
+            html_snippet=str(result)[:500]
+        )
     
     court = cells[1]
     
@@ -277,15 +371,52 @@ def parse_args() -> argparse.Namespace:
 
     return args
 
-if __name__ == "__main__":
+def main() -> int:
+    """Main entry point for the CLI.
+    
+    Returns:
+        Exit code (0 for success, non-zero for errors).
+    """
     import json
     args = parse_args()
-    h = HandelsRegister(args)
-    h.open_startpage()
-    companies = h.search_company()
-    if companies is not None:
-        if args.json:
-            print(json.dumps(companies))
-        else:
-            for c in companies:
-                pr_company_info(c)
+    
+    try:
+        h = HandelsRegister(args)
+        h.open_startpage()
+        companies = h.search_company()
+        
+        if companies is not None:
+            if args.json:
+                print(json.dumps(companies))
+            else:
+                for c in companies:
+                    pr_company_info(c)
+        return 0
+        
+    except NetworkError as e:
+        print(f"Network error: {e}", file=sys.stderr)
+        if args.debug and e.original_error:
+            print(f"Original error: {e.original_error}", file=sys.stderr)
+        return 1
+        
+    except FormError as e:
+        print(f"Form error: {e}", file=sys.stderr)
+        return 2
+        
+    except ParseError as e:
+        print(f"Parse error: {e}", file=sys.stderr)
+        if args.debug and e.html_snippet:
+            print(f"HTML snippet: {e.html_snippet}", file=sys.stderr)
+        return 3
+        
+    except CacheError as e:
+        print(f"Cache error: {e}", file=sys.stderr)
+        return 4
+        
+    except HandelsregisterError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
