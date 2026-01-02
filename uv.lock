@@ -369,6 +369,7 @@ dependencies = [
     { name = "diskcache" },
     { name = "mechanize" },
     { name = "pydantic" },
+    { name = "python-dateutil" },
     { name = "ratelimit" },
     { name = "tenacity" },
 ]
@@ -408,6 +409,7 @@ requires-dist = [
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "python-dateutil", specifier = ">=2.8.0" },
     { name = "ratelimit", specifier = ">=2.2.1" },
     { name = "tenacity", specifier = ">=8.2.0" },
 ]

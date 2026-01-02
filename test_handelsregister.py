@@ -244,6 +244,31 @@ class TestDetailsParser:
         result = DetailsParser._extract_legal_form("Some random text")
         assert result is None
     
+    def test_parse_date_german_format(self):
+        """Test parsing German date format DD.MM.YYYY."""
+        result = DetailsParser.parse_date("15.03.2024")
+        assert result == "15.03.2024"
+    
+    def test_parse_date_in_text(self):
+        """Test parsing date embedded in text."""
+        result = DetailsParser.parse_date("Eingetragen am 01.01.2020 in Berlin")
+        assert result == "01.01.2020"
+    
+    def test_parse_date_invalid(self):
+        """Test that invalid text returns None."""
+        result = DetailsParser.parse_date("No date here")
+        assert result is None
+    
+    def test_parse_date_various_formats(self):
+        """Test that various German dates are parsed correctly."""
+        # Day first format
+        result = DetailsParser.parse_date("5.1.2023")
+        assert result == "05.01.2023"
+        
+        # Full date
+        result = DetailsParser.parse_date("31.12.2022")
+        assert result == "31.12.2022"
+    
     def test_parse_empty_html(self):
         """Test parsing empty HTML."""
         details = DetailsParser.parse_si("<html><body></body></html>")

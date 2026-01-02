@@ -29,6 +29,8 @@ import diskcache
 import mechanize
 from bs4 import BeautifulSoup
 from bs4.element import Tag
+from dateutil import parser as dateutil_parser
+from dateutil.parser import ParserError
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from ratelimit import limits, sleep_and_retry
 from tenacity import (
@@ -543,6 +545,39 @@ class DetailsParser:
     DATE_PATTERN = re.compile(r'\d{1,2}\.\d{1,2}\.\d{4}')
     
     @classmethod
+    def parse_date(cls, text: str, output_format: str = "%d.%m.%Y") -> Optional[str]:
+        """Parses a date from text using dateutil.
+        
+        Handles German date formats (DD.MM.YYYY) and various other formats.
+        Returns the date in a normalized format.
+        
+        Args:
+            text: Text containing a date.
+            output_format: Output format for the date string.
+            
+        Returns:
+            Normalized date string, or None if no date found.
+        """
+        # First try to find a German-style date pattern
+        date_match = cls.DATE_PATTERN.search(text)
+        if date_match:
+            date_str = date_match.group(0)
+            try:
+                # Parse with dayfirst=True for German DD.MM.YYYY format
+                parsed = dateutil_parser.parse(date_str, dayfirst=True)
+                return parsed.strftime(output_format)
+            except (ParserError, ValueError):
+                # If dateutil fails, return the original match
+                return date_str
+        
+        # Try dateutil on the entire text as fallback
+        try:
+            parsed = dateutil_parser.parse(text, dayfirst=True, fuzzy=True)
+            return parsed.strftime(output_format)
+        except (ParserError, ValueError):
+            return None
+    
+    @classmethod
     def parse_si(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
         """Parses structured register content (SI - Strukturierter Registerinhalt).
         
@@ -635,9 +670,11 @@ class DetailsParser:
             if not details.register_num:
                 details.register_num = value
         elif 'eintrag' in label and 'datum' in label:
-            details.registration_date = value
+            details.registration_date = cls.parse_date(value) or value
         elif 'lösch' in label:
-            details.deletion_date = value
+            details.deletion_date = cls.parse_date(value) or value
+        elif 'änderung' in label or 'aktualisiert' in label:
+            details.last_update = cls.parse_date(value) or value
         
         return details
     
