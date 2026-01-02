@@ -15,6 +15,7 @@ import pytest
 
 from handelsregister import (
     Address,
+    BASE_URL,
     CacheEntry,
     Company,
     CompanyDetails,
@@ -27,6 +28,7 @@ from handelsregister import (
     ResultParser,
     SearchCache,
     SearchOptions,
+    build_url,
     get_companies_in_searchresults,
     get_details,
     parse_result,
@@ -641,6 +643,34 @@ class TestConfiguration:
         assert 'GnR' in REGISTER_TYPES
         assert 'VR' in REGISTER_TYPES
         assert 'PR' in REGISTER_TYPES
+
+
+class TestURLHandling:
+    """Unit tests for URL construction using yarl."""
+    
+    def test_base_url_is_yarl_url(self):
+        """Test that BASE_URL is a yarl URL object."""
+        from yarl import URL
+        assert isinstance(BASE_URL, URL)
+        assert str(BASE_URL) == "https://www.handelsregister.de"
+    
+    def test_build_url_basic(self):
+        """Test build_url with just a path."""
+        url = build_url("rp_web/search")
+        assert str(url) == "https://www.handelsregister.de/rp_web/search"
+    
+    def test_build_url_with_query_params(self):
+        """Test build_url with query parameters."""
+        url = build_url("rp_web/search", q="Bank", page="1")
+        url_str = str(url)
+        assert "https://www.handelsregister.de/rp_web/search" in url_str
+        assert "q=Bank" in url_str
+        assert "page=1" in url_str
+    
+    def test_build_url_empty_path(self):
+        """Test build_url with empty path returns base URL."""
+        url = build_url()
+        assert str(url) == "https://www.handelsregister.de"
 
 
 # =============================================================================

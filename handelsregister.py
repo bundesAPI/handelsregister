@@ -20,7 +20,6 @@ import sys
 import tempfile
 import time
 import urllib.error
-import urllib.parse
 from dataclasses import dataclass, field
 from typing import Optional, Any
 
@@ -40,6 +39,7 @@ from tenacity import (
     retry_if_exception_type,
     before_sleep_log,
 )
+from yarl import URL
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -51,13 +51,36 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for search results
 DETAILS_CACHE_TTL_SECONDS: int = 86400  # 24 hours TTL for company details
-BASE_URL: str = "https://www.handelsregister.de"
+BASE_URL: URL = URL("https://www.handelsregister.de")
 REQUEST_TIMEOUT: int = 10
 MAX_RETRIES: int = 3  # Maximum number of retry attempts for network requests
 RETRY_WAIT_MIN: int = 2  # Minimum wait time between retries in seconds
 RETRY_WAIT_MAX: int = 10  # Maximum wait time between retries in seconds
 RATE_LIMIT_CALLS: int = 60  # Maximum requests per hour (per portal terms of service)
 RATE_LIMIT_PERIOD: int = 3600  # Rate limit period in seconds (1 hour)
+
+
+def build_url(path: str = "", **query_params) -> URL:
+    """Builds a URL from BASE_URL with path and optional query parameters.
+    
+    Uses yarl for safe URL construction with proper encoding.
+    
+    Args:
+        path: Path to append to BASE_URL (e.g., "rp_web/erweitertesuche.xhtml").
+        **query_params: Query parameters to add to the URL.
+        
+    Returns:
+        yarl.URL object with the constructed URL.
+        
+    Example:
+        >>> url = build_url("rp_web/search", q="Bank", page="1")
+        >>> str(url)
+        'https://www.handelsregister.de/rp_web/search?q=Bank&page=1'
+    """
+    url = BASE_URL / path if path else BASE_URL
+    if query_params:
+        url = url.with_query(query_params)
+    return url
 
 # Mapping of keyword option names to form values
 KEYWORD_OPTIONS: dict[str, int] = {
@@ -1164,7 +1187,7 @@ class HandelsRegister:
             NetworkError: If the connection fails after all retry attempts.
         """
         try:
-            self.browser.open(BASE_URL, timeout=REQUEST_TIMEOUT)
+            self.browser.open(str(BASE_URL), timeout=REQUEST_TIMEOUT)
         except urllib.error.URLError as e:
             raise NetworkError(
                 f"Failed to connect to handelsregister.de: {e.reason}",
