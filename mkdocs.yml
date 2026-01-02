@@ -1,0 +1,151 @@
+site_name: Handelsregister Dokumentation
+site_description: Python-Package für das gemeinsame Registerportal der deutschen Bundesländer
+site_author: BundesAPI
+site_url: https://bundesapi.github.io/handelsregister
+
+repo_name: bundesAPI/handelsregister
+repo_url: https://github.com/bundesAPI/handelsregister
+
+copyright: Copyright &copy; 2024 BundesAPI
+
+theme:
+  name: material
+  language: de
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Dunkelmodus aktivieren
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Hellmodus aktivieren
+  font:
+    text: Fira Sans
+    code: Fira Code
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/file-document-multiple
+
+plugins:
+  - search:
+      lang: de
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            docstring_section_style: spacy
+            heading_level: 2
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      title: Auf dieser Seite
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: bundesAPI
+      repo: handelsregister
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bundesAPI
+      name: BundesAPI auf GitHub
+  generator: false
+  version:
+    provider: mike
+
+nav:
+  - Startseite: index.md
+  - Erste Schritte:
+    - Installation: installation.md
+    - Schnellstart: schnellstart.md
+  - Benutzerhandbuch:
+    - Übersicht: benutzerhandbuch/index.md
+    - Als Library verwenden: benutzerhandbuch/library.md
+    - Kommandozeile (CLI): benutzerhandbuch/cli.md
+    - Detailabruf: benutzerhandbuch/details.md
+    - Caching: benutzerhandbuch/cache.md
+  - API-Referenz:
+    - Übersicht: api/index.md
+    - Öffentliche Funktionen: api/funktionen.md
+    - Klassen: api/klassen.md
+    - Datenmodelle: api/datenmodelle.md
+    - Exceptions: api/exceptions.md
+  - Referenztabellen:
+    - Bundesländer-Codes: referenz/bundeslaender.md
+    - Registerarten: referenz/registerarten.md
+    - Rechtsformen: referenz/rechtsformen.md
+    - API-Parameter: referenz/parameter.md
+  - Beispiele:
+    - Einfache Beispiele: beispiele/einfach.md
+    - Fortgeschritten: beispiele/fortgeschritten.md
+    - Integrationen: beispiele/integration.md
+  - Rechtliches: rechtliches.md
+  - Changelog: changelog.md
+
