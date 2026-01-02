@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from .cache import SearchCache
 from .constants import KEYWORD_OPTIONS, RESULTS_PER_PAGE_OPTIONS, STATE_CODES
-from .exceptions import FormError, NetworkError, ParseError
+from .exceptions import FormError, NetworkError, ParseError, PartialResultError
 from .models import CacheEntry, CompanyDetails, SearchOptions
 from .parser import DetailsParser, ResultParser
 from .settings import (
@@ -396,8 +396,9 @@ class HandelsRegister:
         company: dict,
         detail_type: str = "SI",
         force_refresh: bool = False,
+        fallback_types: Optional[list[str]] = None,
     ) -> CompanyDetails:
-        """Fetches detailed company information.
+        """Fetches detailed company information with optional fallback strategies.
         
         Args:
             company: Company dict from search results (must contain row_index).
@@ -406,31 +407,72 @@ class HandelsRegister:
                 - "AD": Aktueller Abdruck (current printout)
                 - "UT": Unternehmensträger (company owners)
             force_refresh: Skip cache and fetch fresh data.
+            fallback_types: List of alternative detail types to try if primary fails.
+                If None, defaults to ["AD", "UT"] for graceful degradation.
             
         Returns:
             CompanyDetails with all available information.
             
         Raises:
-            NetworkError: If the request fails.
-            ParseError: If parsing fails.
+            NetworkError: If the request fails after all retries and fallbacks.
+            ParseError: If parsing fails for all attempted types.
             ValueError: If company dict is missing required fields.
         """
         valid_types = ["SI", "AD", "UT", "CD", "HD", "VÖ"]
         if detail_type not in valid_types:
             raise ValueError(f"Invalid detail_type: {detail_type}. Must be one of {valid_types}")
         
-        cache_key = f"details:{detail_type}:{company.get('register_num', '')}:{company.get('court', '')}"
+        # Default fallback types if not specified
+        if fallback_types is None:
+            fallback_types = ["AD", "UT"]
         
-        if not force_refresh:
-            cached_html = self.cache.get(cache_key, "")
-            if cached_html is not None:
-                logger.info("Cache hit for details: %s", cache_key)
-                return self._parse_details(cached_html, company, detail_type)
+        # Try primary detail type first
+        types_to_try = [detail_type] + [ft for ft in fallback_types if ft != detail_type and ft in valid_types]
+        last_error: Optional[Exception] = None
         
-        html = self._fetch_detail_page(company, detail_type)
-        self.cache.set(cache_key, "", html)
+        for attempt_type in types_to_try:
+            cache_key = f"details:{attempt_type}:{company.get('register_num', '')}:{company.get('court', '')}"
+            
+            try:
+                if not force_refresh:
+                    cached_html = self.cache.get(cache_key, "")
+                    if cached_html is not None:
+                        logger.info("Cache hit for details: %s", cache_key)
+                        return self._parse_details(cached_html, company, attempt_type)
+                
+                html = self._fetch_detail_page(company, attempt_type)
+                self.cache.set(cache_key, "", html)
+                
+                return self._parse_details(html, company, attempt_type)
+                
+            except (NetworkError, ParseError) as e:
+                last_error = e
+                if attempt_type != types_to_try[-1]:  # Not the last attempt
+                    logger.warning(
+                        "Failed to fetch %s details for %s, trying fallback: %s",
+                        attempt_type,
+                        company.get('name', 'unknown'),
+                        e
+                    )
+                else:
+                    # Last attempt failed, re-raise with context
+                    raise
+            except Exception as e:
+                last_error = e
+                if attempt_type != types_to_try[-1]:
+                    logger.warning(
+                        "Unexpected error fetching %s details for %s, trying fallback: %s",
+                        attempt_type,
+                        company.get('name', 'unknown'),
+                        e
+                    )
+                else:
+                    raise
         
-        return self._parse_details(html, company, detail_type)
+        # Should never reach here, but just in case
+        if last_error:
+            raise last_error
+        raise NetworkError("Failed to fetch company details after all attempts")
     
     @sleep_and_retry
     @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
@@ -533,6 +575,8 @@ class HandelsRegister:
         detail_type: str = "SI",
         force_refresh: bool = False,
         show_progress: Optional[bool] = None,
+        continue_on_error: bool = True,
+        raise_partial: bool = False,
     ) -> list[CompanyDetails]:
         """Searches for companies and optionally fetches details.
         
@@ -542,9 +586,14 @@ class HandelsRegister:
             detail_type: Type of details to fetch (SI, AD, UT).
             force_refresh: Skip cache.
             show_progress: Show progress bar (auto-detected if None based on TTY).
+            continue_on_error: Continue processing other companies if one fails.
+            raise_partial: Raise PartialResultError if any failures occur.
             
         Returns:
             List of CompanyDetails with full information.
+            
+        Raises:
+            PartialResultError: If raise_partial=True and some operations failed.
         """
         companies = self.search_with_options(options, force_refresh=force_refresh)
         
@@ -556,12 +605,15 @@ class HandelsRegister:
             show_progress = sys.stdout.isatty() and len(companies) > 1
         
         results: list[CompanyDetails] = []
+        failed: list[tuple[dict, Exception]] = []
         iterator = tqdm(companies, desc="Fetching details", unit="company", disable=not show_progress)
         
         for i, company in enumerate(iterator):
             company['row_index'] = i
+            company_name = company.get('name', 'unknown')
             if show_progress:
-                iterator.set_postfix(name=company.get('name', 'unknown')[:30])
+                iterator.set_postfix(name=company_name[:30])
+            
             try:
                 details = self.get_company_details(
                     company, 
@@ -570,9 +622,51 @@ class HandelsRegister:
                 )
                 results.append(details)
             except (NetworkError, ParseError) as e:
-                logger.warning("Failed to fetch details for %s: %s", 
-                             company.get('name', 'unknown'), e)
-                results.append(CompanyDetails.from_company(company))
+                if not continue_on_error:
+                    raise
+                
+                logger.warning(
+                    "Failed to fetch details for %s (%s): %s",
+                    company_name,
+                    company.get('register_num', 'N/A'),
+                    e
+                )
+                
+                # Try fallback: use basic company info
+                try:
+                    fallback = CompanyDetails.from_company(company)
+                    results.append(fallback)
+                except Exception as fallback_error:
+                    logger.error(
+                        "Failed to create fallback for %s: %s",
+                        company_name,
+                        fallback_error
+                    )
+                    failed.append((company, e))
+            except Exception as e:
+                # Unexpected error
+                logger.error(
+                    "Unexpected error fetching details for %s: %s",
+                    company_name,
+                    e,
+                    exc_info=True
+                )
+                if not continue_on_error:
+                    raise
+                failed.append((company, e))
+                # Still try to add basic info
+                try:
+                    results.append(CompanyDetails.from_company(company))
+                except Exception:
+                    pass
+        
+        # Raise partial result error if requested and there were failures
+        if raise_partial and failed:
+            raise PartialResultError(
+                f"Batch operation completed with {len(failed)} failures out of {len(companies)} total",
+                successful=results,
+                failed=failed,
+            )
         
         return results
     

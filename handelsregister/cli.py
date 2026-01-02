@@ -249,9 +249,11 @@ def search_batch(
     states: Optional[list[str]] = None,
     register_type: Optional[str] = None,
     show_progress: Optional[bool] = None,
+    continue_on_error: bool = True,
+    raise_partial: bool = False,
     **kwargs
 ) -> dict[str, list[dict]]:
-    """Performs multiple searches with progress indicators.
+    """Performs multiple searches with progress indicators and error recovery.
     
     Useful for batch processing multiple keywords or search terms.
     
@@ -260,27 +262,41 @@ def search_batch(
         states: List of state codes to filter by.
         register_type: Register type filter.
         show_progress: Show progress bar (auto-detected if None).
+        continue_on_error: Continue processing other keywords if one fails.
+        raise_partial: Raise PartialResultError if any searches fail.
         **kwargs: Additional arguments passed to search().
         
     Returns:
         Dictionary mapping keywords to their search results.
         
+    Raises:
+        PartialResultError: If raise_partial=True and some searches failed.
+        
     Example:
-        >>> from handelsregister import search_batch
+        >>> from handelsregister import search_batch, PartialResultError
         >>> 
         >>> keywords = ["Bank", "Versicherung", "Immobilien"]
-        >>> results = search_batch(keywords, states=["BE", "HH"])
+        >>> try:
+        ...     results = search_batch(keywords, states=["BE", "HH"])
+        ... except PartialResultError as e:
+        ...     print(f"Some searches failed: {len(e.failed)}")
+        ...     results = e.successful
         >>> for keyword, companies in results.items():
         ...     print(f"{keyword}: {len(companies)} companies")
     """
     import sys
+    import logging
     from tqdm import tqdm
+    from .exceptions import PartialResultError, HandelsregisterError
+    
+    logger = logging.getLogger(__name__)
     
     # Auto-detect if we should show progress
     if show_progress is None:
         show_progress = sys.stdout.isatty() and len(keywords_list) > 1
     
     results: dict[str, list[dict]] = {}
+    failed: list[tuple[str, Exception]] = []
     iterator = tqdm(keywords_list, desc="Searching", unit="keyword", disable=not show_progress)
     
     for keyword in iterator:
@@ -293,12 +309,32 @@ def search_batch(
                 register_type=register_type,
                 **kwargs
             )
-        except Exception as e:
-            # Log error but continue with other searches
-            import logging
-            logger = logging.getLogger(__name__)
+        except HandelsregisterError as e:
             logger.error("Failed to search for '%s': %s", keyword, e)
+            if not continue_on_error:
+                raise
+            failed.append((keyword, e))
             results[keyword] = []
+        except Exception as e:
+            # Unexpected error
+            logger.error(
+                "Unexpected error searching for '%s': %s",
+                keyword,
+                e,
+                exc_info=True
+            )
+            if not continue_on_error:
+                raise
+            failed.append((keyword, e))
+            results[keyword] = []
+    
+    # Raise partial result error if requested and there were failures
+    if raise_partial and failed:
+        raise PartialResultError(
+            f"Batch search completed with {len(failed)} failures out of {len(keywords_list)} total",
+            successful=results,
+            failed=failed,
+        )
     
     return results
 

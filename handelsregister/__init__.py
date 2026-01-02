@@ -25,6 +25,7 @@ from .exceptions import (
     HandelsregisterError,
     NetworkError,
     ParseError,
+    PartialResultError,
 )
 from .models import (
     Address,
@@ -83,6 +84,7 @@ __all__ = [
     "HandelsregisterError",
     "NetworkError",
     "ParseError",
+    "PartialResultError",
     # Public API functions
     "search",
     "search_batch",

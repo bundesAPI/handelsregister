@@ -31,3 +31,20 @@ class CacheError(HandelsregisterError):
     """Raised when cache operations fail."""
     pass
 
+
+class PartialResultError(HandelsregisterError):
+    """Raised when a batch operation completes with some failures.
+    
+    This exception contains information about which operations succeeded
+    and which failed, allowing for graceful degradation.
+    """
+    def __init__(
+        self,
+        message: str,
+        successful: list,
+        failed: list[tuple[object, Exception]],
+    ):
+        super().__init__(message)
+        self.successful = successful
+        self.failed = failed  # List of (item, exception) tuples
+
