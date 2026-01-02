@@ -30,6 +30,13 @@ import mechanize
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -43,6 +50,9 @@ DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for search results
 DETAILS_CACHE_TTL_SECONDS: int = 86400  # 24 hours TTL for company details
 BASE_URL: str = "https://www.handelsregister.de"
 REQUEST_TIMEOUT: int = 10
+MAX_RETRIES: int = 3  # Maximum number of retry attempts for network requests
+RETRY_WAIT_MIN: int = 2  # Minimum wait time between retries in seconds
+RETRY_WAIT_MAX: int = 10  # Maximum wait time between retries in seconds
 
 # Mapping of keyword option names to form values
 KEYWORD_OPTIONS: dict[str, int] = {
@@ -1095,11 +1105,20 @@ class HandelsRegister:
         """Gets the cache directory path."""
         return self.cache.cache_dir
     
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
+        retry=retry_if_exception_type(urllib.error.URLError),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def open_startpage(self) -> None:
-        """Opens the Handelsregister start page.
+        """Opens the Handelsregister start page with automatic retries.
+        
+        Uses exponential backoff for retries on network failures.
         
         Raises:
-            NetworkError: If the connection fails or times out.
+            NetworkError: If the connection fails after all retry attempts.
         """
         try:
             self.browser.open(BASE_URL, timeout=REQUEST_TIMEOUT)
@@ -1207,12 +1226,21 @@ class HandelsRegister:
         self._navigate_to_search()
         return self._submit_search(search_opts)
     
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
+        retry=retry_if_exception_type(urllib.error.URLError),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def _navigate_to_search(self) -> None:
-        """Navigates from start page to extended search form.
+        """Navigates from start page to extended search form with retries.
+        
+        Uses exponential backoff for retries on network failures.
         
         Raises:
             FormError: If navigation form is not found.
-            NetworkError: If form submission fails.
+            NetworkError: If form submission fails after all retries.
         """
         try:
             self.browser.select_form(name="naviForm")
@@ -1238,8 +1266,17 @@ class HandelsRegister:
         
         logger.debug("Page title after navigation: %s", self.browser.title())
     
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
+        retry=retry_if_exception_type(urllib.error.URLError),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def _submit_search(self, search_opts: SearchOptions) -> str:
-        """Submits the search form and returns results HTML.
+        """Submits the search form and returns results HTML with retries.
+        
+        Uses exponential backoff for retries on network failures.
         
         Args:
             search_opts: Search options specifying all search parameters.
@@ -1249,7 +1286,7 @@ class HandelsRegister:
             
         Raises:
             FormError: If search form is not found.
-            NetworkError: If form submission fails.
+            NetworkError: If form submission fails after all retries.
         """
         try:
             self.browser.select_form(name="form")
@@ -1365,11 +1402,19 @@ class HandelsRegister:
         
         return self._parse_details(html, company, detail_type)
     
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
+        retry=retry_if_exception_type(urllib.error.URLError),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def _fetch_detail_page(self, company: dict, detail_type: str) -> str:
-        """Fetches a detail page for a company.
+        """Fetches a detail page for a company with retries.
         
         The Handelsregister uses JSF/PrimeFaces which requires specific
         form parameters. We reconstruct these based on the search results.
+        Uses exponential backoff for retries on network failures.
         
         Args:
             company: Company dict with at least 'row_index' from search.
