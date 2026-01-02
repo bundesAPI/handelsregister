@@ -349,6 +349,92 @@ class TestDataClasses:
         assert opts.results_per_page == 100
 
 
+class TestPydanticValidation:
+    """Unit tests for Pydantic validation on models."""
+    
+    def test_search_options_keyword_validation(self):
+        """Test that empty keywords are rejected."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            SearchOptions(keywords="")
+    
+    def test_search_options_keyword_option_validation(self):
+        """Test that invalid keyword_option values are rejected."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            SearchOptions(keywords="test", keyword_option="invalid")
+    
+    def test_search_options_states_validation(self):
+        """Test that invalid state codes are rejected."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            SearchOptions(keywords="test", states=["INVALID"])
+    
+    def test_search_options_states_normalized(self):
+        """Test that state codes are normalized to uppercase."""
+        opts = SearchOptions(keywords="test", states=["be", "hh"])
+        assert opts.states == ["BE", "HH"]
+    
+    def test_search_options_register_type_validation(self):
+        """Test that invalid register types are rejected."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            SearchOptions(keywords="test", register_type="INVALID")
+    
+    def test_search_options_results_per_page_validation(self):
+        """Test that invalid results_per_page values are rejected."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            SearchOptions(keywords="test", results_per_page=999)
+    
+    def test_representative_name_required(self):
+        """Test that Representative requires a name."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            Representative(name="", role="Geschäftsführer")
+    
+    def test_owner_name_required(self):
+        """Test that Owner requires a name."""
+        import pytest
+        from pydantic import ValidationError
+        
+        with pytest.raises(ValidationError):
+            Owner(name="")
+    
+    def test_company_details_from_dict(self):
+        """Test creating CompanyDetails from model_validate."""
+        data = {
+            'name': 'Test GmbH',
+            'register_num': 'HRB 12345',
+            'court': 'Berlin',
+            'state': 'Berlin',
+            'status': 'active',
+        }
+        details = CompanyDetails.model_validate(data)
+        assert details.name == 'Test GmbH'
+        assert details.register_num == 'HRB 12345'
+    
+    def test_address_model_dump(self):
+        """Test Address model_dump for JSON serialization."""
+        addr = Address(street="Test 1", postal_code="12345", city="Berlin")
+        dumped = addr.model_dump()
+        assert dumped['street'] == "Test 1"
+        assert dumped['postal_code'] == "12345"
+        assert dumped['city'] == "Berlin"
+
+
 class TestAddress:
     """Unit tests for Address dataclass."""
     

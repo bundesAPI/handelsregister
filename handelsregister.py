@@ -22,13 +22,14 @@ import time
 import urllib.error
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Any
 
 # Third-party imports
 import diskcache
 import mechanize
 from bs4 import BeautifulSoup
 from bs4.element import Tag
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -125,7 +126,10 @@ class CacheError(HandelsregisterError):
 
 @dataclass
 class CacheEntry:
-    """Represents a cached search result with metadata."""
+    """Represents a cached search result with metadata.
+    
+    Note: Kept as dataclass for internal use only. Not part of public API.
+    """
     query: str
     options: str
     timestamp: float
@@ -152,7 +156,7 @@ class CacheEntry:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> CacheEntry:
+    def from_dict(cls, data: dict) -> 'CacheEntry':
         """Creates a CacheEntry from a dictionary."""
         return cls(
             query=data['query'],
@@ -162,9 +166,10 @@ class CacheEntry:
         )
 
 
-@dataclass
-class SearchOptions:
+class SearchOptions(BaseModel):
     """Encapsulates all search parameters for the Handelsregister.
+    
+    Uses Pydantic for validation and serialization.
     
     Attributes:
         keywords: Search keywords (schlagwoerter).
@@ -176,14 +181,36 @@ class SearchOptions:
         similar_sounding: Use phonetic/similarity search.
         results_per_page: Number of results per page (10, 25, 50, 100).
     """
-    keywords: str
-    keyword_option: str = "all"
-    states: Optional[list[str]] = None
-    register_type: Optional[str] = None
+    model_config = ConfigDict(frozen=False, validate_assignment=True)
+    
+    keywords: str = Field(..., min_length=1, description="Search keywords")
+    keyword_option: str = Field(default="all", pattern="^(all|min|exact)$")
+    states: Optional[list[str]] = Field(default=None, description="State codes to filter by")
+    register_type: Optional[str] = Field(default=None, pattern="^(HRA|HRB|GnR|PR|VR)$")
     register_number: Optional[str] = None
     include_deleted: bool = False
     similar_sounding: bool = False
-    results_per_page: int = 100
+    results_per_page: int = Field(default=100, ge=10, le=100)
+    
+    @field_validator('states')
+    @classmethod
+    def validate_states(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        """Validates state codes against known values."""
+        if v is None:
+            return None
+        valid_codes = set(STATE_CODES.keys())
+        for state in v:
+            if state.upper() not in valid_codes:
+                raise ValueError(f"Invalid state code: {state}. Valid: {', '.join(sorted(valid_codes))}")
+        return [s.upper() for s in v]
+    
+    @field_validator('results_per_page')
+    @classmethod
+    def validate_results_per_page(cls, v: int) -> int:
+        """Validates results_per_page is a valid option."""
+        if v not in RESULTS_PER_PAGE_OPTIONS:
+            raise ValueError(f"results_per_page must be one of {RESULTS_PER_PAGE_OPTIONS}")
+        return v
     
     def cache_key(self) -> str:
         """Generates a unique key for caching based on all options."""
@@ -200,20 +227,33 @@ class SearchOptions:
         return "|".join(parts)
 
 
-@dataclass
-class HistoryEntry:
+class HistoryEntry(BaseModel):
     """Represents a historical name/location entry for a company."""
+    model_config = ConfigDict(frozen=True)
+    
     name: str
     location: str
 
 
-@dataclass
-class Address:
-    """Represents a business address."""
+class Address(BaseModel):
+    """Represents a business address with validation."""
+    model_config = ConfigDict(frozen=False)
+    
     street: Optional[str] = None
-    postal_code: Optional[str] = None
+    postal_code: Optional[str] = Field(default=None, pattern=r"^\d{5}$|^$|None")
     city: Optional[str] = None
     country: str = "Deutschland"
+    
+    @field_validator('postal_code', mode='before')
+    @classmethod
+    def validate_postal_code(cls, v: Any) -> Optional[str]:
+        """Allow None or valid German postal codes."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, str) and len(v) == 5 and v.isdigit():
+            return v
+        # Be lenient - just return as-is for non-standard codes
+        return str(v) if v else None
     
     def __str__(self) -> str:
         """Formats address as string."""
@@ -229,101 +269,78 @@ class Address:
         return ", ".join(parts) if parts else ""
     
     def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
-            'street': self.street,
-            'postal_code': self.postal_code,
-            'city': self.city,
-            'country': self.country,
-        }
+        """Convert to dictionary (for backward compatibility)."""
+        return self.model_dump()
 
 
-@dataclass
-class Representative:
+class Representative(BaseModel):
     """Represents a company representative (Geschäftsführer, Vorstand, etc.)."""
-    name: str
-    role: str  # e.g., "Geschäftsführer", "Vorstand", "Prokurist"
+    model_config = ConfigDict(frozen=False)
+    
+    name: str = Field(..., min_length=1, description="Name of the representative")
+    role: str = Field(..., description="Role (e.g., Geschäftsführer, Vorstand)")
     location: Optional[str] = None
     birth_date: Optional[str] = None
     restrictions: Optional[str] = None  # e.g., "einzelvertretungsberechtigt"
     
     def to_dict(self) -> dict:
-        """Converts to dictionary."""
-        return {
-            'name': self.name,
-            'role': self.role,
-            'location': self.location,
-            'birth_date': self.birth_date,
-            'restrictions': self.restrictions,
-        }
+        """Converts to dictionary (for backward compatibility)."""
+        return self.model_dump()
 
 
-@dataclass
-class Owner:
+class Owner(BaseModel):
     """Represents a company owner/shareholder (Gesellschafter)."""
-    name: str
+    model_config = ConfigDict(frozen=False)
+    
+    name: str = Field(..., min_length=1, description="Name of the owner")
     share: Optional[str] = None  # e.g., "50%", "25.000 EUR"
     owner_type: Optional[str] = None  # e.g., "Kommanditist", "Gesellschafter"
     location: Optional[str] = None
     
     def to_dict(self) -> dict:
-        """Converts to dictionary."""
-        return {
-            'name': self.name,
-            'share': self.share,
-            'owner_type': self.owner_type,
-            'location': self.location,
-        }
+        """Converts to dictionary (for backward compatibility)."""
+        return self.model_dump()
 
 
-@dataclass
-class CompanyDetails:
+class CompanyDetails(BaseModel):
     """Extended company information from detail views.
     
     Contains all information available from the Handelsregister detail
-    views (AD, SI, UT).
+    views (AD, SI, UT). Uses Pydantic for validation and serialization.
     """
+    model_config = ConfigDict(frozen=False, validate_assignment=True)
+    
     # Basic identification (from search results)
-    name: str
-    register_num: str
-    court: str
-    state: str
-    status: str
+    name: str = Field(..., description="Company name")
+    register_num: str = Field(default="", description="Register number (e.g., HRB 12345 B)")
+    court: str = Field(default="", description="Registration court")
+    state: str = Field(default="", description="Federal state")
+    status: str = Field(default="", description="Registration status")
     
     # Extended information (from detail views)
-    legal_form: Optional[str] = None  # Rechtsform (AG, GmbH, KG, etc.)
-    capital: Optional[str] = None  # Stammkapital / Grundkapital
-    currency: Optional[str] = None  # EUR, etc.
+    legal_form: Optional[str] = Field(default=None, description="Legal form (AG, GmbH, KG, etc.)")
+    capital: Optional[str] = Field(default=None, description="Share capital / Stammkapital")
+    currency: Optional[str] = Field(default=None, description="Currency (EUR, etc.)")
     address: Optional[Address] = None
-    purpose: Optional[str] = None  # Unternehmensgegenstand
-    representatives: list[Representative] = field(default_factory=list)
-    owners: list[Owner] = field(default_factory=list)
-    registration_date: Optional[str] = None  # Eintragungsdatum
-    last_update: Optional[str] = None  # Letzte Änderung
-    deletion_date: Optional[str] = None  # Löschungsdatum (if deleted)
+    purpose: Optional[str] = Field(default=None, description="Business purpose / Unternehmensgegenstand")
+    representatives: list[Representative] = Field(default_factory=list)
+    owners: list[Owner] = Field(default_factory=list)
+    registration_date: Optional[str] = Field(default=None, description="Registration date")
+    last_update: Optional[str] = Field(default=None, description="Last update date")
+    deletion_date: Optional[str] = Field(default=None, description="Deletion date (if deleted)")
     
     # Additional metadata
-    raw_data: Optional[dict] = field(default=None, repr=False)  # Original parsed data
+    raw_data: Optional[dict] = Field(default=None, repr=False, exclude=True)
     
     def to_dict(self) -> dict:
-        """Converts to dictionary for JSON serialization."""
-        return {
-            'name': self.name,
-            'register_num': self.register_num,
-            'court': self.court,
-            'state': self.state,
-            'status': self.status,
-            'legal_form': self.legal_form,
-            'capital': self.capital,
-            'currency': self.currency,
-            'address': self.address.to_dict() if self.address else None,
-            'purpose': self.purpose,
-            'representatives': [r.to_dict() for r in self.representatives],
-            'owners': [o.to_dict() for o in self.owners],
-            'registration_date': self.registration_date,
-            'last_update': self.last_update,
-            'deletion_date': self.deletion_date,
-        }
+        """Converts to dictionary for JSON serialization (backward compatibility)."""
+        data = self.model_dump(exclude={'raw_data'})
+        # Convert nested models to dicts
+        if self.address:
+            data['address'] = self.address.to_dict()
+        data['representatives'] = [r.to_dict() for r in self.representatives]
+        data['owners'] = [o.to_dict() for o in self.owners]
+        return data
     
     @classmethod
     def from_company(cls, company: dict) -> 'CompanyDetails':
@@ -337,17 +354,18 @@ class CompanyDetails:
         )
 
 
-@dataclass
-class Company:
+class Company(BaseModel):
     """Represents a company record from the Handelsregister."""
+    model_config = ConfigDict(frozen=False, populate_by_name=True)
+    
     court: str
     name: str
     state: str
     status: str
-    status_normalized: str
+    status_normalized: str = Field(default="", alias='statusCurrent')
     documents: str
     register_num: Optional[str] = None
-    history: list[HistoryEntry] = field(default_factory=list)
+    history: list[HistoryEntry] = Field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Converts to dictionary for backward compatibility."""
