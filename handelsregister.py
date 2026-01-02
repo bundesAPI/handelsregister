@@ -1361,16 +1361,17 @@ class HandelsRegister:
             for state_code in search_opts.states:
                 if state_code in STATE_CODES:
                     try:
-                        control_name = f"form:bundesland{state_code}"
+                        state_name = STATE_CODES[state_code]
+                        control_name = f"form:{state_name}_input"
                         self.browser.form.find_control(control_name).value = ["on"]
-                        logger.debug("Enabled state filter: %s", state_code)
+                        logger.debug("Enabled state filter: %s (%s)", state_code, state_name)
                     except mechanize.ControlNotFoundError:
                         logger.warning("State control not found: %s", control_name)
         
         # Optional: Register type
         if search_opts.register_type:
             try:
-                self.browser["form:registerArt"] = [search_opts.register_type]
+                self.browser["form:registerArt_input"] = [search_opts.register_type]
                 logger.debug("Set register type: %s", search_opts.register_type)
             except mechanize.ControlNotFoundError:
                 logger.warning("Register type control not found")
@@ -1386,7 +1387,7 @@ class HandelsRegister:
         # Optional: Include deleted entries
         if search_opts.include_deleted:
             try:
-                self.browser.form.find_control("form:suchOptionenGeloescht").value = ["true"]
+                self.browser.form.find_control("form:auchGeloeschte_input").value = ["on"]
                 logger.debug("Enabled include deleted option")
             except mechanize.ControlNotFoundError:
                 logger.warning("Include deleted control not found")
@@ -1394,7 +1395,7 @@ class HandelsRegister:
         # Optional: Similar sounding (phonetic search)
         if search_opts.similar_sounding:
             try:
-                self.browser.form.find_control("form:suchOptionenAehnlich").value = ["true"]
+                self.browser.form.find_control("form:aenlichLautendeSchlagwoerterBoolChkbox_input").value = ["on"]
                 logger.debug("Enabled similar sounding option")
             except mechanize.ControlNotFoundError:
                 logger.warning("Similar sounding control not found")
@@ -1402,7 +1403,7 @@ class HandelsRegister:
         # Optional: Results per page
         if search_opts.results_per_page in RESULTS_PER_PAGE_OPTIONS:
             try:
-                self.browser["form:ergebnisseProSeite"] = [str(search_opts.results_per_page)]
+                self.browser["form:ergebnisseProSeite_input"] = [str(search_opts.results_per_page)]
                 logger.debug("Set results per page: %d", search_opts.results_per_page)
             except mechanize.ControlNotFoundError:
                 logger.warning("Results per page control not found")
