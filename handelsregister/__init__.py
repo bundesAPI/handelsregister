@@ -57,7 +57,7 @@ from .settings import (
 )
 
 # Import public API functions
-from .cli import get_details, pr_company_details, pr_company_info, search
+from .cli import get_details, pr_company_details, pr_company_info, search, search_batch
 
 # Package metadata
 __version__ = "0.2.0"
@@ -85,6 +85,7 @@ __all__ = [
     "ParseError",
     # Public API functions
     "search",
+    "search_batch",
     "get_details",
     "pr_company_info",
     "pr_company_details",

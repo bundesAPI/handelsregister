@@ -244,6 +244,65 @@ def search(
     return hr.search_company()
 
 
+def search_batch(
+    keywords_list: list[str],
+    states: Optional[list[str]] = None,
+    register_type: Optional[str] = None,
+    show_progress: Optional[bool] = None,
+    **kwargs
+) -> dict[str, list[dict]]:
+    """Performs multiple searches with progress indicators.
+    
+    Useful for batch processing multiple keywords or search terms.
+    
+    Args:
+        keywords_list: List of keywords to search for.
+        states: List of state codes to filter by.
+        register_type: Register type filter.
+        show_progress: Show progress bar (auto-detected if None).
+        **kwargs: Additional arguments passed to search().
+        
+    Returns:
+        Dictionary mapping keywords to their search results.
+        
+    Example:
+        >>> from handelsregister import search_batch
+        >>> 
+        >>> keywords = ["Bank", "Versicherung", "Immobilien"]
+        >>> results = search_batch(keywords, states=["BE", "HH"])
+        >>> for keyword, companies in results.items():
+        ...     print(f"{keyword}: {len(companies)} companies")
+    """
+    import sys
+    from tqdm import tqdm
+    
+    # Auto-detect if we should show progress
+    if show_progress is None:
+        show_progress = sys.stdout.isatty() and len(keywords_list) > 1
+    
+    results: dict[str, list[dict]] = {}
+    iterator = tqdm(keywords_list, desc="Searching", unit="keyword", disable=not show_progress)
+    
+    for keyword in iterator:
+        if show_progress:
+            iterator.set_postfix(keyword=keyword[:30])
+        try:
+            results[keyword] = search(
+                keyword,
+                states=states,
+                register_type=register_type,
+                **kwargs
+            )
+        except Exception as e:
+            # Log error but continue with other searches
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Failed to search for '%s': %s", keyword, e)
+            results[keyword] = []
+    
+    return results
+
+
 def get_details(
     company: dict,
     detail_type: str = "SI",
@@ -373,6 +432,7 @@ def main() -> int:
                 fetch_details=True,
                 detail_type=detail_type,
                 force_refresh=getattr(args, 'force', False),
+                show_progress=not args.json,  # Show progress unless JSON output
             )
             
             if companies_details:

@@ -3,6 +3,7 @@
 import argparse
 import logging
 import pathlib
+import sys
 import time
 import urllib.error
 from typing import Optional
@@ -16,6 +17,7 @@ from tenacity import (
     retry_if_exception_type,
     before_sleep_log,
 )
+from tqdm import tqdm
 
 from .cache import SearchCache
 from .constants import KEYWORD_OPTIONS, RESULTS_PER_PAGE_OPTIONS, STATE_CODES
@@ -530,6 +532,7 @@ class HandelsRegister:
         fetch_details: bool = True,
         detail_type: str = "SI",
         force_refresh: bool = False,
+        show_progress: Optional[bool] = None,
     ) -> list[CompanyDetails]:
         """Searches for companies and optionally fetches details.
         
@@ -538,6 +541,7 @@ class HandelsRegister:
             fetch_details: Whether to fetch details for each result.
             detail_type: Type of details to fetch (SI, AD, UT).
             force_refresh: Skip cache.
+            show_progress: Show progress bar (auto-detected if None based on TTY).
             
         Returns:
             List of CompanyDetails with full information.
@@ -547,9 +551,17 @@ class HandelsRegister:
         if not fetch_details:
             return [CompanyDetails.from_company(c) for c in companies]
         
+        # Auto-detect if we should show progress (only if TTY and more than 1 item)
+        if show_progress is None:
+            show_progress = sys.stdout.isatty() and len(companies) > 1
+        
         results: list[CompanyDetails] = []
-        for i, company in enumerate(companies):
+        iterator = tqdm(companies, desc="Fetching details", unit="company", disable=not show_progress)
+        
+        for i, company in enumerate(iterator):
             company['row_index'] = i
+            if show_progress:
+                iterator.set_postfix(name=company.get('name', 'unknown')[:30])
             try:
                 details = self.get_company_details(
                     company, 
