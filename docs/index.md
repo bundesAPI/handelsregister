@@ -2,100 +2,100 @@
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch:{ .lg .middle } __Schneller Einstieg__
+-   :material-rocket-launch:{ .lg .middle } __Quick Start__
 
     ---
 
-    Installieren Sie das Package und starten Sie in wenigen Minuten mit der Abfrage des deutschen Handelsregisters.
+    Install the package and start querying the German commercial register in minutes.
 
     [:octicons-arrow-right-24: Installation](installation.md)
 
--   :material-code-braces:{ .lg .middle } __Als Library__
+-   :material-code-braces:{ .lg .middle } __As Library__
 
     ---
 
-    Integrieren Sie die Handelsregister-Abfrage in Ihre Python-Anwendungen mit einer einfachen API.
+    Integrate commercial register queries into your Python applications with a simple API.
 
-    [:octicons-arrow-right-24: Library-Dokumentation](benutzerhandbuch/library.md)
+    [:octicons-arrow-right-24: Library Documentation](guide/library.md)
 
--   :material-console:{ .lg .middle } __Kommandozeile__
-
-    ---
-
-    Nutzen Sie das CLI-Tool für schnelle Abfragen direkt aus dem Terminal.
-
-    [:octicons-arrow-right-24: CLI-Dokumentation](benutzerhandbuch/cli.md)
-
--   :material-api:{ .lg .middle } __API-Referenz__
+-   :material-console:{ .lg .middle } __Command Line__
 
     ---
 
-    Vollständige technische Dokumentation aller Klassen, Funktionen und Datenmodelle.
+    Use the CLI tool for quick queries directly from your terminal.
 
-    [:octicons-arrow-right-24: API-Referenz](api/index.md)
+    [:octicons-arrow-right-24: CLI Documentation](guide/cli.md)
+
+-   :material-api:{ .lg .middle } __API Reference__
+
+    ---
+
+    Complete technical documentation of all classes, functions, and data models.
+
+    [:octicons-arrow-right-24: API Reference](api/index.md)
 
 </div>
 
 ---
 
-## Was ist Handelsregister?
+## What is Handelsregister?
 
-**Handelsregister** ist ein Python-Package für das gemeinsame Registerportal der deutschen Bundesländer. Es ermöglicht die programmatische Abfrage des Handelsregisters – sowohl als **Kommandozeilen-Tool** als auch als **Library** in eigenen Anwendungen.
+**Handelsregister** is a Python package for the shared commercial register portal of the German federal states. It enables programmatic access to the German commercial register – both as a **command-line tool** and as a **library** in your own applications.
 
 ```python
 from handelsregister import search
 
-# Unternehmen suchen
-unternehmen = search("Deutsche Bahn")
+# Search for companies
+companies = search("Deutsche Bahn")
 
-for firma in unternehmen:
-    print(f"{firma['name']} - {firma['register_num']}")
+for company in companies:
+    print(f"{company['name']} - {company['register_num']}")
 ```
 
-### Funktionsumfang
+### Features
 
-- :material-magnify: **Unternehmenssuche** – Suche nach Firmennamen, Registernummer oder Ort
-- :material-filter: **Flexible Filter** – Nach Bundesland, Registerart und Status filtern
-- :material-file-document: **Detailabruf** – Erweiterte Unternehmensinformationen abrufen
-- :material-cached: **Intelligentes Caching** – Automatische Zwischenspeicherung von Ergebnissen
-- :material-console: **CLI-Tool** – Kommandozeilen-Interface für schnelle Abfragen
-- :material-code-json: **JSON-Export** – Maschinenlesbare Ausgabe für Weiterverarbeitung
+- :material-magnify: **Company Search** – Search by company name, register number, or location
+- :material-filter: **Flexible Filters** – Filter by state, register type, and status
+- :material-file-document: **Detail Fetching** – Retrieve extended company information
+- :material-cached: **Intelligent Caching** – Automatic caching of results
+- :material-console: **CLI Tool** – Command-line interface for quick queries
+- :material-code-json: **JSON Export** – Machine-readable output for further processing
 
 ---
 
-## Schnellbeispiel
+## Quick Example
 
 === "Python"
 
     ```python
     from handelsregister import search, get_details
 
-    # Suche nach Banken in Berlin und Hamburg
-    banken = search(
+    # Search for banks in Berlin and Hamburg
+    banks = search(
         keywords="Bank",
         states=["BE", "HH"],
         register_type="HRB"
     )
 
-    print(f"Gefunden: {len(banken)} Unternehmen")
+    print(f"Found: {len(banks)} companies")
 
-    # Details zum ersten Ergebnis abrufen
-    if banken:
-        details = get_details(banken[0])
-        print(f"Firma: {details.name}")
-        print(f"Kapital: {details.capital} {details.currency}")
+    # Get details for the first result
+    if banks:
+        details = get_details(banks[0])
+        print(f"Company: {details.name}")
+        print(f"Capital: {details.capital} {details.currency}")
     ```
 
-=== "Kommandozeile"
+=== "Command Line"
 
     ```bash
-    # Einfache Suche
+    # Simple search
     handelsregister -s "Deutsche Bahn"
 
-    # Mit JSON-Ausgabe
+    # With JSON output
     handelsregister -s "GASAG AG" --exact --json
 
-    # Mit Filtern
+    # With filters
     handelsregister -s "Bank" --states BE,HH --register-type HRB
     ```
 
@@ -103,65 +103,65 @@ for firma in unternehmen:
 
 ## Installation
 
-Die schnellste Methode zur Installation ist mit [uv](https://docs.astral.sh/uv/):
+The fastest installation method is with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-# Klonen und installieren
+# Clone and install
 git clone https://github.com/bundesAPI/handelsregister.git
 cd handelsregister
 uv sync
 ```
 
-Oder direkt mit pip:
+Or directly with pip:
 
 ```bash
 pip install git+https://github.com/bundesAPI/handelsregister.git
 ```
 
-:material-arrow-right: [Vollständige Installationsanleitung](installation.md)
+:material-arrow-right: [Complete Installation Guide](installation.md)
 
 ---
 
-## Architektur
+## Architecture
 
-Das Package besteht aus mehreren Schichten:
+The package consists of several layers:
 
 ```mermaid
 graph TB
-    A[CLI / Anwendung] --> B[Public API]
+    A[CLI / Application] --> B[Public API]
     B --> C[HandelsRegister]
     C --> D[SearchCache]
     C --> E[ResultParser]
     C --> F[DetailsParser]
-    D --> G[Dateisystem]
+    D --> G[File System]
     C --> H[mechanize Browser]
     H --> I[handelsregister.de]
 ```
 
-| Komponente | Beschreibung |
-|------------|--------------|
-| `search()` | Einfache API für Unternehmenssuche |
-| `get_details()` | API für Detailabruf |
-| `HandelsRegister` | Browser-Automatisierung |
-| `SearchCache` | TTL-basiertes Caching |
-| `ResultParser` | HTML-Parsing der Suchergebnisse |
-| `DetailsParser` | Parsing der Detailansichten |
+| Component | Description |
+|-----------|-------------|
+| `search()` | Simple API for company search |
+| `get_details()` | API for fetching details |
+| `HandelsRegister` | Browser automation |
+| `SearchCache` | TTL-based caching |
+| `ResultParser` | HTML parsing of search results |
+| `DetailsParser` | Parsing of detail views |
 
 ---
 
-## Rechtliche Hinweise
+## Legal Notice
 
-!!! warning "Nutzungsbeschränkungen"
+!!! warning "Usage Restrictions"
 
-    Es ist unzulässig, mehr als **60 Abrufe pro Stunde** zu tätigen. Das Registerportal ist das Ziel automatisierter Massenabfragen, deren Frequenz häufig die Straftatbestände der **§§ 303a, b StGB** erfüllt.
+    It is not permitted to make more than **60 requests per hour**. The register portal is frequently targeted by automated mass queries, which often constitute criminal offenses under **§§ 303a, b StGB** (German Criminal Code).
 
-Die Einsichtnahme in das Handelsregister ist gemäß **§ 9 Abs. 1 HGB** jeder Person zu Informationszwecken gestattet.
+Access to the commercial register is permitted for informational purposes according to **§ 9 Abs. 1 HGB** (German Commercial Code).
 
-:material-arrow-right: [Vollständige rechtliche Hinweise](rechtliches.md)
+:material-arrow-right: [Complete Legal Notice](legal.md)
 
 ---
 
-## Unterstützung
+## Support
 
 <div class="grid cards" markdown>
 
@@ -169,15 +169,15 @@ Die Einsichtnahme in das Handelsregister ist gemäß **§ 9 Abs. 1 HGB** jeder P
 
     ---
 
-    Bugs melden und Features anfragen
+    Report bugs and request features
 
-    [:octicons-arrow-right-24: Issues öffnen](https://github.com/bundesAPI/handelsregister/issues)
+    [:octicons-arrow-right-24: Open Issues](https://github.com/bundesAPI/handelsregister/issues)
 
--   :material-source-pull:{ .lg .middle } __Beitragen__
+-   :material-source-pull:{ .lg .middle } __Contribute__
 
     ---
 
-    Pull Requests sind willkommen!
+    Pull requests are welcome!
 
     [:octicons-arrow-right-24: Repository](https://github.com/bundesAPI/handelsregister)
 
@@ -185,7 +185,7 @@ Die Einsichtnahme in das Handelsregister ist gemäß **§ 9 Abs. 1 HGB** jeder P
 
 ---
 
-## Lizenz
+## License
 
-Dieses Projekt ist Teil der [bundesAPI](https://github.com/bundesAPI) Initiative und steht unter der MIT-Lizenz.
+This project is part of the [bundesAPI](https://github.com/bundesAPI) initiative and is licensed under the MIT License.
 

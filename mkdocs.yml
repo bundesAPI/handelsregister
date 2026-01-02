@@ -1,5 +1,5 @@
-site_name: Handelsregister Dokumentation
-site_description: Python-Package für das gemeinsame Registerportal der deutschen Bundesländer
+site_name: Handelsregister Documentation
+site_description: Python package for the German commercial register portal
 site_author: BundesAPI
 site_url: https://bundesapi.github.io/handelsregister
 
@@ -10,20 +10,20 @@ copyright: Copyright &copy; 2024 BundesAPI
 
 theme:
   name: material
-  language: de
+  language: en
   palette:
     - scheme: default
       primary: deep purple
       accent: amber
       toggle:
         icon: material/brightness-7
-        name: Dunkelmodus aktivieren
+        name: Switch to dark mode
     - scheme: slate
       primary: deep purple
       accent: amber
       toggle:
         icon: material/brightness-4
-        name: Hellmodus aktivieren
+        name: Switch to light mode
   font:
     text: Fira Sans
     code: Fira Code
@@ -46,8 +46,47 @@ theme:
     logo: material/file-document-multiple
 
 plugins:
-  - search:
-      lang: de
+  - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: de
+          name: Deutsch
+          build: true
+          nav_translations:
+            Home: Startseite
+            Getting Started: Erste Schritte
+            Installation: Installation
+            Quickstart: Schnellstart
+            User Guide: Benutzerhandbuch
+            Overview: Übersicht
+            Using as Library: Als Library verwenden
+            Command Line (CLI): Kommandozeile (CLI)
+            Fetching Details: Detailabruf
+            Caching: Caching
+            API Reference: API-Referenz
+            Public Functions: Öffentliche Funktionen
+            Classes: Klassen
+            Data Models: Datenmodelle
+            Exceptions: Exceptions
+            Reference Tables: Referenztabellen
+            State Codes: Bundesländer-Codes
+            Register Types: Registerarten
+            Legal Forms: Rechtsformen
+            API Parameters: API-Parameter
+            Examples: Beispiele
+            Simple Examples: Einfache Beispiele
+            Advanced: Fortgeschritten
+            Integrations: Integrationen
+            Legal Notice: Rechtliches
+            Changelog: Changelog
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -78,7 +117,7 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
-      title: Auf dieser Seite
+      title: On this page
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.betterem:
@@ -115,37 +154,41 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/bundesAPI
-      name: BundesAPI auf GitHub
+      name: BundesAPI on GitHub
   generator: false
-  version:
-    provider: mike
+  alternate:
+    - name: English
+      link: /handelsregister/
+      lang: en
+    - name: Deutsch
+      link: /handelsregister/de/
+      lang: de
 
 nav:
-  - Startseite: index.md
-  - Erste Schritte:
+  - Home: index.md
+  - Getting Started:
     - Installation: installation.md
-    - Schnellstart: schnellstart.md
-  - Benutzerhandbuch:
-    - Übersicht: benutzerhandbuch/index.md
-    - Als Library verwenden: benutzerhandbuch/library.md
-    - Kommandozeile (CLI): benutzerhandbuch/cli.md
-    - Detailabruf: benutzerhandbuch/details.md
-    - Caching: benutzerhandbuch/cache.md
-  - API-Referenz:
-    - Übersicht: api/index.md
-    - Öffentliche Funktionen: api/funktionen.md
-    - Klassen: api/klassen.md
-    - Datenmodelle: api/datenmodelle.md
+    - Quickstart: quickstart.md
+  - User Guide:
+    - Overview: guide/index.md
+    - Using as Library: guide/library.md
+    - Command Line (CLI): guide/cli.md
+    - Fetching Details: guide/details.md
+    - Caching: guide/cache.md
+  - API Reference:
+    - Overview: api/index.md
+    - Public Functions: api/functions.md
+    - Classes: api/classes.md
+    - Data Models: api/models.md
     - Exceptions: api/exceptions.md
-  - Referenztabellen:
-    - Bundesländer-Codes: referenz/bundeslaender.md
-    - Registerarten: referenz/registerarten.md
-    - Rechtsformen: referenz/rechtsformen.md
-    - API-Parameter: referenz/parameter.md
-  - Beispiele:
-    - Einfache Beispiele: beispiele/einfach.md
-    - Fortgeschritten: beispiele/fortgeschritten.md
-    - Integrationen: beispiele/integration.md
-  - Rechtliches: rechtliches.md
+  - Reference Tables:
+    - State Codes: reference/states.md
+    - Register Types: reference/registers.md
+    - Legal Forms: reference/legal-forms.md
+    - API Parameters: reference/parameters.md
+  - Examples:
+    - Simple Examples: examples/simple.md
+    - Advanced: examples/advanced.md
+    - Integrations: examples/integrations.md
+  - Legal Notice: legal.md
   - Changelog: changelog.md
-
