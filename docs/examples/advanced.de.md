@@ -64,7 +64,7 @@ df = pd.DataFrame(firmen)
 
 # Analyse
 print("Unternehmen nach Gericht:")
-print(df['register_court'].value_counts())
+print(df['court'].value_counts())
 
 print("\nUnternehmen nach Registerart:")
 print(df['register_type'].value_counts())
@@ -87,7 +87,7 @@ for firma in firmen[:10]:  # Limit für Demo
     details = get_details(firma)
     daten.append({
         'name': details.name,
-        'gericht': details.register_court,
+        'gericht': details.court,
         'nummer': details.register_number,
         'kapital': details.capital,
         'stadt': details.address.city if details.address else None,
@@ -183,7 +183,7 @@ from handelsregister import search, get_details
 
 def erstelle_bericht(firmenname: str) -> str:
     """Erstellt einen detaillierten Unternehmensbericht."""
-    firmen = search(firmenname, exact=True)
+    firmen = search(firmenname, keyword_option="exact")
     
     if not firmen:
         return f"Unternehmen nicht gefunden: {firmenname}"
@@ -197,7 +197,7 @@ def erstelle_bericht(firmenname: str) -> str:
     bericht.append("")
     
     bericht.append("REGISTRIERUNG")
-    bericht.append(f"  Gericht: {details.register_court}")
+    bericht.append(f"  Gericht: {details.court}")
     bericht.append(f"  Nummer:  {details.register_type} {details.register_number}")
     bericht.append(f"  Status:  {details.status}")
     bericht.append("")

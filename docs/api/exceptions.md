@@ -134,7 +134,7 @@ try:
 except CacheError as e:
     print(f"Cache error: {e}")
     # Try without cache
-    companies = search("Bank", use_cache=False)
+    companies = search("Bank", force_refresh=True)
 ```
 
 ---

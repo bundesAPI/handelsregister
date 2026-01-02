@@ -7,14 +7,15 @@ Complete reference of all parameters for the `search()` function.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `keywords` | `str` | Required | Search term for company names |
+| `keyword_option` | `str` | `"all"` | How to match keywords: "all", "min", or "exact" |
 | `states` | `List[str]` | `None` | Filter by federal states |
 | `register_type` | `str` | `None` | Filter by register type |
-| `register_court` | `str` | `None` | Specific register court |
 | `register_number` | `str` | `None` | Specific register number |
-| `only_active` | `bool` | `False` | Only currently registered |
-| `exact` | `bool` | `False` | Exact name match |
+| `include_deleted` | `bool` | `False` | Include deleted/historical entries |
 | `similar_sounding` | `bool` | `False` | Include similar-sounding names |
-| `use_cache` | `bool` | `True` | Use cached results |
+| `results_per_page` | `int` | `100` | Number of results per page (10, 25, 50, 100) |
+| `force_refresh` | `bool` | `False` | Bypass cache and fetch fresh data |
+| `debug` | `bool` | `False` | Enable debug logging |
 
 ---
 
@@ -85,21 +86,26 @@ search("Wohnungsbau", register_type="GnR")
 
 ---
 
-### register_court
+### keyword_option
 
-Filter by specific register court.
+How to match keywords in the search.
 
 ```python
-# Only Berlin Charlottenburg
-search("Bank", register_court="Berlin (Charlottenburg)")
+# All keywords must match (default)
+search("Deutsche Bank", keyword_option="all")
 
-# Only Munich
-search("Bank", register_court="München")
+# At least one keyword must match
+search("Deutsche Bank", keyword_option="min")
+
+# Exact name match
+search("GASAG AG", keyword_option="exact")
 ```
 
-**Type:** `str` or `None`
+**Type:** `str`
 
-**Note:** Court names must match exactly as they appear in the register.
+**Default:** `"all"`
+
+**Valid values:** `"all"`, `"min"`, `"exact"`
 
 ---
 
@@ -111,44 +117,24 @@ Search for a specific register number.
 # Find by register number
 search("", register_number="HRB 12345")
 
-# Combined with court
-search("", 
-       register_court="Berlin (Charlottenburg)", 
-       register_number="HRB 44343")
+# Combined with keywords
+search("GASAG", register_number="HRB 44343")
 ```
 
 **Type:** `str` or `None`
 
 ---
 
-### only_active
+### include_deleted
 
-Filter for currently registered companies only.
-
-```python
-# Only active companies
-search("Bank", only_active=True)
-
-# Include deleted/merged (default)
-search("Bank", only_active=False)
-```
-
-**Type:** `bool`
-
-**Default:** `False`
-
----
-
-### exact
-
-Require exact name match instead of partial.
+Include deleted/historical entries in results.
 
 ```python
-# Exact match - finds only "GASAG AG"
-search("GASAG AG", exact=True)
+# Include deleted entries
+search("Bank", include_deleted=True)
 
-# Partial match - finds "GASAG AG", "GASAG Beteiligungs GmbH", etc.
-search("GASAG", exact=False)
+# Only currently registered (default)
+search("Bank", include_deleted=False)
 ```
 
 **Type:** `bool`
@@ -174,21 +160,56 @@ search("Müller", similar_sounding=True)
 
 ---
 
-### use_cache
+### results_per_page
 
-Whether to use cached results.
+Number of results to return per page.
+
+```python
+# Get 50 results per page
+search("Bank", results_per_page=50)
+
+# Get maximum results (100)
+search("Bank", results_per_page=100)
+```
+
+**Type:** `int`
+
+**Default:** `100`
+
+**Valid values:** `10`, `25`, `50`, `100`
+
+---
+
+### force_refresh
+
+Bypass cache and fetch fresh data from the website.
 
 ```python
 # Use cache (default)
-search("Bank", use_cache=True)
+search("Bank", force_refresh=False)
 
 # Always fetch fresh data
-search("Bank", use_cache=False)
+search("Bank", force_refresh=True)
 ```
 
 **Type:** `bool`
 
-**Default:** `True`
+**Default:** `False`
+
+---
+
+### debug
+
+Enable debug logging for troubleshooting.
+
+```python
+# Enable debug output
+search("Bank", debug=True)
+```
+
+**Type:** `bool`
+
+**Default:** `False`
 
 ---
 
@@ -200,14 +221,15 @@ from handelsregister import search
 # Full example with all parameters
 companies = search(
     keywords="Bank",              # Search for "Bank"
+    keyword_option="all",         # All keywords must match
     states=["BE", "HH"],          # In Berlin and Hamburg
     register_type="HRB",          # Only corporations
-    register_court=None,          # Any court
     register_number=None,         # Any number
-    only_active=True,             # Only active companies
-    exact=False,                  # Partial match OK
-    similar_sounding=False,       # No phonetic search
-    use_cache=True,               # Use cache
+    include_deleted=False,        # Only active companies
+    similar_sounding=False,        # No phonetic search
+    results_per_page=100,         # Maximum results
+    force_refresh=False,          # Use cache
+    debug=False,                  # No debug output
 )
 
 print(f"Found: {len(companies)} companies")
@@ -219,19 +241,23 @@ print(f"Found: {len(companies)} companies")
 
 | Python Parameter | CLI Option |
 |-----------------|------------|
-| `keywords` | `-s, --search` |
+| `keywords` | `-s, --schlagwoerter` |
+| `keyword_option` | `-so, --schlagwortOptionen` |
 | `states` | `--states` |
 | `register_type` | `--register-type` |
-| `only_active` | `--active-only` |
-| `exact` | `--exact` |
-| `use_cache=False` | `--no-cache` |
+| `register_number` | `--register-number` |
+| `include_deleted` | `--include-deleted` |
+| `similar_sounding` | `--similar-sounding` |
+| `results_per_page` | `--results-per-page` |
+| `force_refresh=True` | `-f, --force` |
+| `debug=True` | `-d, --debug` |
 
 ```bash
 handelsregister \
     -s "Bank" \
     --states BE,HH \
     --register-type HRB \
-    --active-only
+    --schlagwortOptionen all
 ```
 
 ---

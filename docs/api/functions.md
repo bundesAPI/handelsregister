@@ -43,11 +43,10 @@ Returns a list of dictionaries with company information:
 [
     {
         "name": "Deutsche Bank AG",
-        "register_court": "Frankfurt am Main",
-        "register_num": "HRB 12345",
-        "register_type": "HRB",
+        "court": "Frankfurt am Main",
+        "register_num": "HRB 12345 B",
+        "state": "Hessen",
         "status": "currently registered",
-        "state": "HE",
         "history": []
     },
     ...

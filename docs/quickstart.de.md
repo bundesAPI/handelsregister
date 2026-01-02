@@ -25,7 +25,7 @@ ergebnisse = search("Deutsche Bahn")
 # Ergebnisse ausgeben
 for firma in ergebnisse:
     print(f"{firma['name']}")
-    print(f"  Register: {firma['register_court']} {firma['register_num']}")
+    print(f"  Register: {firma['court']} {firma['register_num']}")
     print(f"  Status: {firma['status']}")
     print()
 ```
@@ -91,7 +91,7 @@ ergebnisse = search(
     keywords="Bank",
     states=["BE", "HH"],
     register_type="HRB",
-    only_active=True
+    include_deleted=False
 )
 ```
 
@@ -103,7 +103,7 @@ ergebnisse = search(
 from handelsregister import search, get_details
 
 # Suchen
-firmen = search("GASAG AG", exact=True)
+firmen = search("GASAG AG", keyword_option="exact")
 
 if firmen:
     # Detailinformationen abrufen
@@ -134,7 +134,7 @@ ergebnisse1 = search("Deutsche Bank")
 ergebnisse2 = search("Deutsche Bank")
 
 # Frische Suche erzwingen (Cache umgehen)
-ergebnisse3 = search("Deutsche Bank", use_cache=False)
+ergebnisse3 = search("Deutsche Bank", force_refresh=True)
 ```
 
 Standard Cache-Dauer: **24 Stunden**

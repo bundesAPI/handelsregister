@@ -134,7 +134,7 @@ try:
 except CacheError as e:
     print(f"Cache-Fehler: {e}")
     # Ohne Cache versuchen
-    firmen = search("Bank", use_cache=False)
+    firmen = search("Bank", force_refresh=True)
 ```
 
 ---
@@ -174,7 +174,7 @@ def robuste_suche(keywords, **kwargs):
     
     except CacheError as e:
         logger.warning(f"Cache-Fehler: {e}, wiederhole ohne Cache")
-        return search(keywords, use_cache=False, **kwargs)
+        return search(keywords, force_refresh=True, **kwargs)
     
     except HandelsregisterError as e:
         logger.error(f"Allgemeiner Fehler: {e}")

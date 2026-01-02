@@ -36,7 +36,6 @@ async def get_company(court: str, number: str):
     try:
         companies = search(
             "",
-            register_court=court,
             register_number=number
         )
         if not companies:
@@ -94,7 +93,7 @@ def search_companies():
 def company_details(name):
     """Get company details."""
     try:
-        companies = search(name, exact=True)
+        companies = search(name, keyword_option="exact")
         if not companies:
             return jsonify({"error": "Not found"}), 404
         
@@ -151,7 +150,7 @@ from handelsregister import search, get_details
 
 class Company(models.Model):
     name = models.CharField(max_length=255)
-    register_court = models.CharField(max_length=100)
+    court = models.CharField(max_length=100)
     register_number = models.CharField(max_length=50)
     capital = models.DecimalField(max_digits=15, decimal_places=2, null=True)
     last_updated = models.DateTimeField(auto_now=True)
@@ -167,7 +166,7 @@ class Company(models.Model):
         
         return cls.objects.create(
             name=details.name,
-            register_court=details.register_court,
+            court=details.court,
             register_number=details.register_number,
             capital=float(details.capital) if details.capital else None
         )
@@ -239,7 +238,7 @@ class Company(Base):
     
     id = Column(String, primary_key=True)
     name = Column(String)
-    register_court = Column(String)
+    court = Column(String)
     register_number = Column(String)
     capital = Column(Float)
     updated_at = Column(DateTime, default=datetime.utcnow)
@@ -257,10 +256,10 @@ def save_company(company_name):
     details = get_details(companies[0])
     
     company = Company(
-        id=f"{details.register_court}_{details.register_number}",
+        id=f"{details.court}_{details.register_num}",
         name=details.name,
-        register_court=details.register_court,
-        register_number=details.register_number,
+        court=details.court,
+        register_num=details.register_num,
         capital=float(details.capital) if details.capital else None
     )
     

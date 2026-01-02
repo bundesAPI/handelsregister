@@ -25,7 +25,7 @@ results = search("Deutsche Bahn")
 # Display results
 for company in results:
     print(f"{company['name']}")
-    print(f"  Register: {company['register_court']} {company['register_num']}")
+    print(f"  Register: {company['court']} {company['register_num']}")
     print(f"  Status: {company['status']}")
     print()
 ```
@@ -86,12 +86,12 @@ handelsregister -s "GmbH" --register-type HRB
 ### Combined Filters
 
 ```python
-# Banks in Berlin or Hamburg, only HRB
+# Banks in Berlin or Hamburg, only HRB, exclude deleted entries
 results = search(
     keywords="Bank",
     states=["BE", "HH"],
     register_type="HRB",
-    only_active=True
+    include_deleted=False
 )
 ```
 
@@ -103,7 +103,7 @@ results = search(
 from handelsregister import search, get_details
 
 # Search
-companies = search("GASAG AG", exact=True)
+companies = search("GASAG AG", keyword_option="exact")
 
 if companies:
     # Fetch detailed information
@@ -134,7 +134,7 @@ results1 = search("Deutsche Bank")
 results2 = search("Deutsche Bank")
 
 # Force fresh search (bypass cache)
-results3 = search("Deutsche Bank", use_cache=False)
+results3 = search("Deutsche Bank", force_refresh=True)
 ```
 
 Default cache duration: **24 hours**
@@ -144,14 +144,16 @@ Default cache duration: **24 hours**
 ## Error Handling
 
 ```python
-from handelsregister import search, SearchError, RateLimitError
+from handelsregister import search, NetworkError, FormError, ParseError
 
 try:
     results = search("Deutsche Bahn")
-except RateLimitError:
-    print("Too many requests! Max 60 per hour allowed.")
-except SearchError as e:
-    print(f"Search error: {e}")
+except NetworkError as e:
+    print(f"Network error: {e}")
+except FormError as e:
+    print(f"Form error: {e}")
+except ParseError as e:
+    print(f"Parse error: {e}")
 ```
 
 ---

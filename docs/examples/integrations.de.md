@@ -36,7 +36,7 @@ async def hole_unternehmen(gericht: str, nummer: str):
     try:
         firmen = search(
             "",
-            register_court=gericht,
+            court=gericht,
             register_number=nummer
         )
         if not firmen:
@@ -94,7 +94,7 @@ def suche_unternehmen():
 def unternehmens_details(name):
     """Unternehmensdetails abrufen."""
     try:
-        firmen = search(name, exact=True)
+        firmen = search(name, keyword_option="exact")
         if not firmen:
             return jsonify({"fehler": "Nicht gefunden"}), 404
         
@@ -159,7 +159,7 @@ class Unternehmen(models.Model):
     @classmethod
     def erstelle_aus_register(cls, firmenname):
         """Erstellt Unternehmen aus Registerdaten."""
-        firmen = search(firmenname, exact=True)
+        firmen = search(firmenname, keyword_option="exact")
         if not firmen:
             raise ValueError(f"Unternehmen nicht gefunden: {firmenname}")
         
@@ -167,14 +167,14 @@ class Unternehmen(models.Model):
         
         return cls.objects.create(
             name=details.name,
-            registergericht=details.register_court,
+            registergericht=details.court,
             registernummer=details.register_number,
             kapital=float(details.capital) if details.capital else None
         )
     
     def aktualisiere_aus_register(self):
         """Aktualisiert Unternehmensdaten aus Register."""
-        firmen = search(self.name, exact=True)
+        firmen = search(self.name, keyword_option="exact")
         if firmen:
             details = get_details(firmen[0])
             self.kapital = float(details.capital) if details.capital else None
@@ -250,16 +250,16 @@ def speichere_unternehmen(firmenname):
     """Sucht und speichert Unternehmen in Datenbank."""
     session = Session()
     
-    firmen = search(firmenname, exact=True)
+    firmen = search(firmenname, keyword_option="exact")
     if not firmen:
         return None
     
     details = get_details(firmen[0])
     
     unternehmen = Unternehmen(
-        id=f"{details.register_court}_{details.register_number}",
+        id=f"{details.court}_{details.register_number}",
         name=details.name,
-        registergericht=details.register_court,
+        registergericht=details.court,
         registernummer=details.register_number,
         kapital=float(details.capital) if details.capital else None
     )

@@ -28,7 +28,7 @@ The basic search returns limited information. For complete details, use the `get
 from handelsregister import search, get_details
 
 # First, search for the company
-companies = search("GASAG AG", exact=True)
+companies = search("GASAG AG", keyword_option="exact")
 
 if companies:
     # Then fetch details
@@ -51,9 +51,9 @@ details = get_details(company)
 
 # Basic info
 print(details.name)              # "GASAG AG"
-print(details.register_court)    # "Berlin (Charlottenburg)"
-print(details.register_number)   # "HRB 44343"
-print(details.register_type)     # "HRB"
+print(details.court)             # "Berlin (Charlottenburg)"
+print(details.register_num)      # "HRB 44343 B"
+print(details.state)             # "Berlin"
 print(details.status)            # "currently registered"
 ```
 
@@ -161,7 +161,7 @@ def show_company_details(name: str):
     """Display complete details for a company."""
     
     # Search
-    companies = search(name, exact=True)
+    companies = search(name, keyword_option="exact")
     
     if not companies:
         print(f"No company found: {name}")
@@ -176,8 +176,8 @@ def show_company_details(name: str):
     print("=" * 60)
     
     # Registration
-    print(f"\nRegister: {details.register_court}")
-    print(f"Number:   {details.register_type} {details.register_number}")
+    print(f"\nRegister: {details.court}")
+    print(f"Number:   {details.register_num}")
     print(f"Status:   {details.status}")
     
     # Capital
@@ -199,10 +199,10 @@ def show_company_details(name: str):
             print(f"  • {rep.name}{role}")
     
     # Business purpose
-    if details.business_purpose:
+    if details.purpose:
         print(f"\nBusiness Purpose:")
         # Truncate if too long
-        purpose = details.business_purpose
+        purpose = details.purpose
         if len(purpose) > 200:
             purpose = purpose[:200] + "..."
         print(f"  {purpose}")
@@ -225,7 +225,7 @@ details1 = get_details(company)
 details2 = get_details(company)
 
 # Force fresh fetch
-details3 = get_details(company, use_cache=False)
+details3 = get_details(company, force_refresh=True)
 ```
 
 ---

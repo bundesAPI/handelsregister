@@ -43,7 +43,7 @@ Gibt eine Liste von Dictionaries mit Unternehmensinformationen zurück:
 [
     {
         "name": "Deutsche Bank AG",
-        "register_court": "Frankfurt am Main",
+        "court": "Frankfurt am Main",
         "register_num": "HRB 12345",
         "register_type": "HRB",
         "status": "aktuell eingetragen",

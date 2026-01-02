@@ -17,7 +17,7 @@ firmen = search("Deutsche Bahn")
 # Ergebnisse verarbeiten
 for firma in firmen:
     print(f"Name: {firma['name']}")
-    print(f"Gericht: {firma['register_court']}")
+    print(f"Gericht: {firma['court']}")
     print(f"Nummer: {firma['register_num']}")
     print(f"Status: {firma['status']}")
     print("---")
@@ -30,7 +30,7 @@ Die Funktion gibt eine Liste von Dictionaries mit folgenden Schlüsseln zurück:
 | Schlüssel | Typ | Beschreibung |
 |-----------|-----|--------------|
 | `name` | `str` | Firmenname |
-| `register_court` | `str` | Registergericht |
+| `court` | `str` | Registergericht |
 | `register_num` | `str` | Registernummer (z.B. "HRB 12345") |
 | `status` | `str` | Registrierungsstatus |
 | `state` | `str` | Bundesland-Code (z.B. "BE") |
@@ -47,11 +47,11 @@ firmen = search(
     keywords="Bank",              # Suchbegriff (erforderlich)
     states=["BE", "HH"],          # Nach Bundesländern filtern
     register_type="HRB",          # Nach Registerart filtern
-    register_court="Berlin",      # Spezifisches Registergericht
+    court="Berlin",      # Spezifisches Registergericht
     register_number="12345",      # Spezifische Registernummer
-    only_active=True,             # Nur aktuell eingetragene
+    include_deleted=False,             # Nur aktuell eingetragene
     exact=False,                  # Exakte Namensübereinstimmung
-    use_cache=True,               # Caching verwenden
+    force_refresh=False,               # Caching verwenden
     similar_sounding=False,       # Ähnlich klingende Namen einschließen
 )
 ```
@@ -100,10 +100,10 @@ Nach aktuell eingetragenen Unternehmen filtern:
 
 ```python
 # Nur aktive Unternehmen
-search("Bank", only_active=True)
+search("Bank", include_deleted=False)
 
 # Gelöschte/fusionierte einschließen
-search("Bank", only_active=False)
+search("Bank", include_deleted=True)
 ```
 
 #### `exact`
@@ -111,7 +111,7 @@ Exakte Namensübereinstimmung erfordern:
 
 ```python
 # Nur exakte Übereinstimmung
-search("GASAG AG", exact=True)
+search("GASAG AG", keyword_option="exact")
 
 # Teilübereinstimmungen erlaubt (Standard)
 search("GASAG", exact=False)
@@ -164,7 +164,7 @@ firmen = search("Bank", states=["BE"])
 df = pd.DataFrame(firmen)
 
 # Analysieren
-print(df.groupby('register_court').size())
+print(df.groupby('court').size())
 ```
 
 ---
@@ -209,7 +209,7 @@ ergebnisse = hr.search("Bank")
 
 ```python
 # Cache für diese Suche deaktivieren
-firmen = search("Bank", use_cache=False)
+firmen = search("Bank", force_refresh=True)
 
 # Oder global
 hr = HandelsRegister(cache=None)

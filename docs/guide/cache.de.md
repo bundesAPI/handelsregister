@@ -42,7 +42,7 @@ ergebnisse2 = search("Deutsche Bank")
 
 ```python
 # Cache für diesen Aufruf überspringen
-ergebnisse = search("Deutsche Bank", use_cache=False)
+ergebnisse = search("Deutsche Bank", force_refresh=True)
 ```
 
 ### Cache löschen
@@ -136,7 +136,7 @@ search("Bank", states=["BE"])
 # Diese erzeugen unterschiedliche Cache-Keys:
 search("Bank", states=["BE"])
 search("Bank", states=["HH"])
-search("Bank", states=["BE"], only_active=True)
+search("Bank", states=["BE"], include_deleted=False)
 ```
 
 ---
@@ -155,7 +155,7 @@ search("Bank", states=["BE"], only_active=True)
   "results": [
     {
       "name": "Deutsche Bank AG",
-      "register_court": "Frankfurt am Main",
+      "court": "Frankfurt am Main",
       "register_num": "HRB 12345",
       "status": "aktuell eingetragen"
     }
@@ -221,7 +221,7 @@ hr = HandelsRegister(cache=cache)
 
 ```python
 # Einzelabfrage, kein Caching nötig
-ergebnisse = search("Spezifische Firma GmbH", use_cache=False)
+ergebnisse = search("Spezifische Firma GmbH", force_refresh=True)
 ```
 
 ### 5. Periodische Cache-Bereinigung

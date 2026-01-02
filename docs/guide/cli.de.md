@@ -95,7 +95,7 @@ handelsregister -s "GASAG" --json
 [
   {
     "name": "GASAG AG",
-    "register_court": "Berlin (Charlottenburg)",
+    "court": "Berlin (Charlottenburg)",
     "register_num": "HRB 44343",
     "status": "aktuell eingetragen",
     "state": "BE"

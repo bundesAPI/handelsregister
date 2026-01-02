@@ -28,7 +28,7 @@ Die einfache Suche liefert begrenzte Informationen. Für vollständige Details v
 from handelsregister import search, get_details
 
 # Zuerst nach dem Unternehmen suchen
-firmen = search("GASAG AG", exact=True)
+firmen = search("GASAG AG", keyword_option="exact")
 
 if firmen:
     # Dann Details abrufen
@@ -51,7 +51,7 @@ details = get_details(firma)
 
 # Grundinfo
 print(details.name)              # "GASAG AG"
-print(details.register_court)    # "Berlin (Charlottenburg)"
+print(details.court)    # "Berlin (Charlottenburg)"
 print(details.register_number)   # "HRB 44343"
 print(details.register_type)     # "HRB"
 print(details.status)            # "aktuell eingetragen"
@@ -161,7 +161,7 @@ def zeige_firmendetails(name: str):
     """Zeigt vollständige Details für ein Unternehmen an."""
     
     # Suchen
-    firmen = search(name, exact=True)
+    firmen = search(name, keyword_option="exact")
     
     if not firmen:
         print(f"Kein Unternehmen gefunden: {name}")
@@ -176,7 +176,7 @@ def zeige_firmendetails(name: str):
     print("=" * 60)
     
     # Registrierung
-    print(f"\nRegister: {details.register_court}")
+    print(f"\nRegister: {details.court}")
     print(f"Nummer:   {details.register_type} {details.register_number}")
     print(f"Status:   {details.status}")
     
@@ -225,7 +225,7 @@ details1 = get_details(firma)
 details2 = get_details(firma)
 
 # Frischen Abruf erzwingen
-details3 = get_details(firma, use_cache=False)
+details3 = get_details(firma, force_refresh=True)
 ```
 
 ---

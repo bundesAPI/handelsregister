@@ -17,7 +17,7 @@ Diese Seite dokumentiert die Dataclasses für die strukturierte Datendarstellung
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
 | `name` | `str` | Firmenname |
-| `register_court` | `str` | Registergericht |
+| `court` | `str` | Registergericht |
 | `register_num` | `str` | Registernummer (z.B. "HRB 12345") |
 | `register_type` | `str` | Registerart (HRA, HRB, etc.) |
 | `status` | `str` | Registrierungsstatus |
@@ -29,7 +29,7 @@ Diese Seite dokumentiert die Dataclasses für die strukturierte Datendarstellung
 ```python
 firma = Company(
     name="Deutsche Bank AG",
-    register_court="Frankfurt am Main",
+    court="Frankfurt am Main",
     register_num="HRB 12345",
     register_type="HRB",
     status="aktuell eingetragen",
@@ -53,7 +53,7 @@ firma = Company(
 | Feld | Typ | Beschreibung |
 |------|-----|--------------|
 | `name` | `str` | Firmenname |
-| `register_court` | `str` | Registergericht |
+| `court` | `str` | Registergericht |
 | `register_number` | `str` | Registernummer |
 | `register_type` | `str` | Registerart |
 | `status` | `str` | Registrierungsstatus |
@@ -70,7 +70,7 @@ firma = Company(
 ```python
 details = CompanyDetails(
     name="GASAG AG",
-    register_court="Berlin (Charlottenburg)",
+    court="Berlin (Charlottenburg)",
     register_number="44343",
     register_type="HRB",
     status="aktuell eingetragen",
@@ -233,7 +233,7 @@ optionen = SearchOptions(
     keywords="Bank",
     states=["BE", "HH"],
     register_type="HRB",
-    only_active=True,
+    include_deleted=False,
     exact=False
 )
 ```

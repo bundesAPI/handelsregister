@@ -110,7 +110,7 @@ sequenceDiagram
         keywords="Bank",
         states=["BE", "HH"],
         register_type="HRB",
-        only_active=True
+        include_deleted=False
     )
     ```
 
@@ -119,7 +119,7 @@ sequenceDiagram
     ```python
     from handelsregister import search, get_details
     
-    firmen = search("GASAG AG", exact=True)
+    firmen = search("GASAG AG", keyword_option="exact")
     if firmen:
         details = get_details(firmen[0])
         print(details.capital)

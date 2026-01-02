@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """
-bundesAPI/handelsregister is the command-line interface for the shared register of companies portal for the German federal states.
-You can query, download, automate and much more, without using a web browser.
+Python client for the German Handelsregister (commercial register).
 
-Architecture:
-    - SearchCache: Handles caching of search results with TTL expiration
-    - ResultParser: Parses HTML search results into structured data
-    - HandelsRegister: Browser automation for the Handelsregister website
-    - CLI: Command-line interface (main, parse_args)
+This package provides both a CLI tool and a library interface to search the
+Handelsregister portal without using a browser. Built as part of the bundesAPI
+initiative to make German government data more accessible.
 """
 
 from __future__ import annotations
@@ -134,18 +131,18 @@ class CacheEntry:
     html: str
     
     def is_expired(self, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS) -> bool:
-        """Check if the cache entry has expired.
+        """Checks if the cache entry has expired.
         
         Args:
             ttl_seconds: Time-to-live in seconds.
             
         Returns:
-            True if the entry is expired, False otherwise.
+            True if expired, False otherwise.
         """
         return (time.time() - self.timestamp) > ttl_seconds
     
     def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
+        """Converts to dictionary for JSON serialization."""
         return {
             'query': self.query,
             'options': self.options,
@@ -155,7 +152,7 @@ class CacheEntry:
     
     @classmethod
     def from_dict(cls, data: dict) -> CacheEntry:
-        """Create a CacheEntry from a dictionary."""
+        """Creates a CacheEntry from a dictionary."""
         return cls(
             query=data['query'],
             options=data['options'],
@@ -188,7 +185,7 @@ class SearchOptions:
     results_per_page: int = 100
     
     def cache_key(self) -> str:
-        """Generate a unique key for caching based on all options."""
+        """Generates a unique key for caching based on all options."""
         parts = [
             self.keywords,
             self.keyword_option,
@@ -218,7 +215,7 @@ class Address:
     country: str = "Deutschland"
     
     def __str__(self) -> str:
-        """Format address as string."""
+        """Formats address as string."""
         parts = []
         if self.street:
             parts.append(self.street)
@@ -250,7 +247,7 @@ class Representative:
     restrictions: Optional[str] = None  # e.g., "einzelvertretungsberechtigt"
     
     def to_dict(self) -> dict:
-        """Convert to dictionary."""
+        """Converts to dictionary."""
         return {
             'name': self.name,
             'role': self.role,
@@ -269,7 +266,7 @@ class Owner:
     location: Optional[str] = None
     
     def to_dict(self) -> dict:
-        """Convert to dictionary."""
+        """Converts to dictionary."""
         return {
             'name': self.name,
             'share': self.share,
@@ -282,8 +279,8 @@ class Owner:
 class CompanyDetails:
     """Extended company information from detail views.
     
-    This class contains all information available from the Handelsregister
-    detail views (AD, SI, UT).
+    Contains all information available from the Handelsregister detail
+    views (AD, SI, UT).
     """
     # Basic identification (from search results)
     name: str
@@ -308,7 +305,7 @@ class CompanyDetails:
     raw_data: Optional[dict] = field(default=None, repr=False)  # Original parsed data
     
     def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
+        """Converts to dictionary for JSON serialization."""
         return {
             'name': self.name,
             'register_num': self.register_num,
@@ -329,7 +326,7 @@ class CompanyDetails:
     
     @classmethod
     def from_company(cls, company: dict) -> 'CompanyDetails':
-        """Create CompanyDetails from a basic company search result dict."""
+        """Creates CompanyDetails from a basic company search result dict."""
         return cls(
             name=company.get('name', ''),
             register_num=company.get('register_num', ''),
@@ -352,7 +349,7 @@ class Company:
     history: list[HistoryEntry] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for backward compatibility."""
+        """Converts to dictionary for backward compatibility."""
         return {
             'court': self.court,
             'register_num': self.register_num,
@@ -370,14 +367,11 @@ class Company:
 # =============================================================================
 
 class SearchCache:
-    """Handles caching of search results and company details with TTL expiration.
+    """Caches search results and company details with configurable TTL.
     
-    Cache files are stored as JSON in a temporary directory with SHA-256
-    hashed filenames to prevent path traversal attacks.
-    
-    The cache supports different TTLs for different types of data:
-    - Search results: Shorter TTL (default 1 hour) as results may change
-    - Company details: Longer TTL (default 24 hours) as details change rarely
+    Uses SHA-256 hashed filenames to avoid path traversal issues. Different
+    TTLs for search results (1h default) vs details (24h default) since details
+    change less frequently.
     """
     
     def __init__(
@@ -411,18 +405,17 @@ class SearchCache:
         return self.cache_dir / f"{cache_key}.json"
     
     def get(self, query: str, options: str) -> Optional[str]:
-        """Get cached HTML content if available and not expired.
+        """Returns cached HTML if available and not expired.
         
         Args:
-            query: The search query string (or cache key for details).
-            options: The search options.
+            query: Search query string (or cache key for details).
+            options: Search options string.
             
         Returns:
-            Cached HTML content, or None if not available.
+            Cached HTML content, or None if not cached or expired.
             
-        Note:
-            Uses details_ttl_seconds for cache keys starting with "details:",
-            otherwise uses ttl_seconds.
+        Uses details_ttl_seconds for keys starting with "details:", otherwise
+        ttl_seconds.
         """
         cache_path = self._get_cache_path(query, options)
         
@@ -449,12 +442,12 @@ class SearchCache:
             return None
     
     def set(self, query: str, options: str, html: str) -> None:
-        """Save HTML content to cache.
+        """Caches HTML content.
         
         Args:
-            query: The search query string.
-            options: The search options.
-            html: The HTML content to cache.
+            query: Search query string.
+            options: Search options string.
+            html: HTML content to cache.
         """
         cache_path = self._get_cache_path(query, options)
         entry = CacheEntry(
@@ -471,17 +464,17 @@ class SearchCache:
             logger.warning("Failed to write cache file: %s", e)
     
     def _delete_file(self, path: pathlib.Path) -> None:
-        """Safely delete a cache file."""
+        """Deletes a cache file, ignoring errors if it doesn't exist."""
         try:
             path.unlink()
         except OSError:
             pass
     
     def clear(self, details_only: bool = False) -> int:
-        """Clear all cache files.
+        """Deletes all cache files.
         
         Args:
-            details_only: If True, only clear details cache (keys starting with "details:").
+            details_only: If True, only delete details cache entries.
             
         Returns:
             Number of files deleted.
@@ -502,14 +495,11 @@ class SearchCache:
         return count
     
     def get_stats(self) -> dict:
-        """Get cache statistics.
+        """Returns cache statistics.
         
         Returns:
-            Dictionary with cache statistics:
-            - total_files: Total number of cache files
-            - search_files: Number of search result cache files
-            - details_files: Number of details cache files
-            - total_size_bytes: Total size in bytes
+            Dict with total_files, search_files, details_files, and
+            total_size_bytes.
         """
         stats = {
             'total_files': 0,
@@ -540,7 +530,7 @@ class SearchCache:
 # =============================================================================
 
 class DetailsParser:
-    """Parses detail view HTML (SI, AD, UT) into structured CompanyDetails."""
+    """Parses detail view HTML (SI, AD, UT) into CompanyDetails objects."""
     
     # Common patterns for extracting data
     CAPITAL_PATTERN = re.compile(
@@ -551,14 +541,14 @@ class DetailsParser:
     
     @classmethod
     def parse_si(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
-        """Parse structured register content (SI - Strukturierter Registerinhalt).
+        """Parses structured register content (SI - Strukturierter Registerinhalt).
         
         Args:
-            html: The HTML content of the SI detail view.
+            html: HTML content of the SI detail view.
             base_info: Optional base company info from search results.
             
         Returns:
-            CompanyDetails with all parsed information.
+            CompanyDetails with parsed information.
         """
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -579,8 +569,7 @@ class DetailsParser:
     
     @classmethod
     def _parse_si_tables(cls, soup: BeautifulSoup, details: CompanyDetails) -> CompanyDetails:
-        """Extract data from SI tables."""
-        # Look for tables with company data
+        """Extracts data from SI tables."""
         tables = soup.find_all('table')
         
         for table in tables:
@@ -597,12 +586,10 @@ class DetailsParser:
     
     @classmethod
     def _parse_si_sections(cls, soup: BeautifulSoup, details: CompanyDetails) -> CompanyDetails:
-        """Extract data from SI sections (divs, panels, etc.)."""
-        # Look for labeled sections
+        """Extracts data from SI sections (divs, panels, etc.)."""
         for div in soup.find_all(['div', 'span', 'p']):
             text = div.get_text(strip=True)
             
-            # Extract capital
             if details.capital is None:
                 capital_match = cls.CAPITAL_PATTERN.search(text)
                 if capital_match:
@@ -610,11 +597,9 @@ class DetailsParser:
                     if capital_match.group(2):
                         details.currency = capital_match.group(2).replace('€', 'EUR')
             
-            # Extract legal form
             if details.legal_form is None:
                 details.legal_form = cls._extract_legal_form(text)
             
-            # Extract representatives
             reps = cls._extract_representatives(div)
             if reps:
                 details.representatives.extend(reps)
@@ -623,26 +608,17 @@ class DetailsParser:
     
     @classmethod
     def _map_field(cls, label: str, value: str, details: CompanyDetails) -> CompanyDetails:
-        """Map a label-value pair to the appropriate CompanyDetails field."""
+        """Maps a label-value pair to the appropriate CompanyDetails field."""
         if not value:
             return details
         
-        # Firma / Name
         if any(x in label for x in ['firma', 'name']) and not details.name:
             details.name = value
-        
-        # Rechtsform
         elif 'rechtsform' in label:
             details.legal_form = value
-        
-        # Sitz / Adresse
         elif 'sitz' in label or 'geschäftsanschrift' in label:
             details.address = cls._parse_address(value)
-        
-        # Stammkapital / Grundkapital
         elif 'kapital' in label:
-            # Try to extract amount and currency from value
-            # Pattern: number followed by optional currency
             amount_pattern = re.match(r'([0-9.,]+)\s*(EUR|€|DM)?', value)
             if amount_pattern:
                 details.capital = amount_pattern.group(1).strip()
@@ -650,21 +626,13 @@ class DetailsParser:
                     details.currency = amount_pattern.group(2).replace('€', 'EUR')
             else:
                 details.capital = value
-        
-        # Gegenstand
         elif 'gegenstand' in label or 'unternehmensgegenstand' in label:
             details.purpose = value
-        
-        # Registernummer
         elif 'registernummer' in label or 'aktenzeichen' in label:
             if not details.register_num:
                 details.register_num = value
-        
-        # Eintragung
         elif 'eintrag' in label and 'datum' in label:
             details.registration_date = value
-        
-        # Löschung
         elif 'lösch' in label:
             details.deletion_date = value
         
@@ -672,14 +640,12 @@ class DetailsParser:
     
     @classmethod
     def _parse_address(cls, text: str) -> Address:
-        """Parse an address string into an Address object."""
-        # Try to extract postal code and city
+        """Parses an address string into an Address object."""
         plz_city_match = re.search(r'(\d{5})\s+(.+?)(?:,|$)', text)
         
         if plz_city_match:
             postal_code = plz_city_match.group(1)
             city = plz_city_match.group(2).strip()
-            # Everything before the postal code is the street
             street_part = text[:plz_city_match.start()].strip().rstrip(',')
             return Address(
                 street=street_part if street_part else None,
@@ -687,23 +653,19 @@ class DetailsParser:
                 city=city,
             )
         else:
-            # Just use the whole text as city
             return Address(city=text)
     
     @classmethod
     def _extract_legal_form(cls, text: str) -> Optional[str]:
-        """Extract legal form from text.
+        """Extracts legal form from text.
         
-        The order matters: more specific forms (like GmbH & Co. KG) must be
+        Order matters: more specific forms (like GmbH & Co. KG) must be
         checked before less specific ones (like GmbH or KG).
         """
-        # Order matters: more specific forms first
         legal_forms = [
-            # Compound forms first
             ('GmbH & Co. KG', 'GmbH & Co. KG'),
             ('GmbH & Co. OHG', 'GmbH & Co. OHG'),
             ('UG (haftungsbeschränkt) & Co. KG', 'UG & Co. KG'),
-            # Then standard forms
             ('Europäische Aktiengesellschaft', 'SE'),
             ('Aktiengesellschaft', 'AG'),
             ('Gesellschaft mit beschränkter Haftung', 'GmbH'),
@@ -719,13 +681,10 @@ class DetailsParser:
         
         text_lower = text.lower()
         for full_name, abbreviation in legal_forms:
-            # Check for full name
             if full_name.lower() in text_lower:
                 return full_name
-            # Check for abbreviation (with word boundaries)
             if f' {abbreviation}' in text or text.endswith(abbreviation):
                 return full_name
-            # Also check without space for compound names
             if abbreviation in text and '&' in abbreviation:
                 return full_name
         
@@ -733,11 +692,10 @@ class DetailsParser:
     
     @classmethod
     def _extract_representatives(cls, element: Tag) -> list[Representative]:
-        """Extract representative information from an element."""
+        """Extracts representative information from an element."""
         representatives = []
         text = element.get_text()
         
-        # Common role patterns
         role_patterns = [
             (r'Geschäftsführer(?:in)?[:\s]+([^,;]+)', 'Geschäftsführer'),
             (r'Vorstand[:\s]+([^,;]+)', 'Vorstand'),
@@ -752,7 +710,6 @@ class DetailsParser:
             for match in matches:
                 name = match.group(1).strip()
                 if name and len(name) > 2:
-                    # Check for location in parentheses
                     location = None
                     loc_match = re.search(r'\(([^)]+)\)', name)
                     if loc_match:
@@ -769,21 +726,20 @@ class DetailsParser:
     
     @classmethod
     def parse_ad(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
-        """Parse current printout (AD - Aktueller Abdruck).
+        """Parses current printout (AD - Aktueller Abdruck).
         
-        The AD view contains the current state of the register entry,
-        typically as formatted text rather than structured tables.
+        The AD view contains the current state of the register entry as
+        formatted text rather than structured tables.
         
         Args:
-            html: The HTML content of the AD detail view.
+            html: HTML content of the AD detail view.
             base_info: Optional base company info from search results.
             
         Returns:
-            CompanyDetails with all parsed information.
+            CompanyDetails with parsed information.
         """
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Initialize with base info
         details = CompanyDetails(
             name=base_info.get('name', '') if base_info else '',
             register_num=base_info.get('register_num', '') if base_info else '',
@@ -792,7 +748,6 @@ class DetailsParser:
             status=base_info.get('status', '') if base_info else '',
         )
         
-        # AD content is typically in a content div or pre-formatted text
         content_div = soup.find('div', class_=re.compile(r'content|abdruck|register', re.I))
         if content_div is None:
             content_div = soup.find('body')
@@ -800,17 +755,14 @@ class DetailsParser:
         if content_div:
             text = content_div.get_text()
             
-            # Extract legal form
             details.legal_form = cls._extract_legal_form(text)
             
-            # Extract capital using the pattern
             capital_match = cls.CAPITAL_PATTERN.search(text)
             if capital_match:
                 details.capital = capital_match.group(1)
                 if capital_match.group(2):
                     details.currency = capital_match.group(2).replace('€', 'EUR')
             
-            # Extract purpose (Gegenstand des Unternehmens)
             purpose_match = re.search(
                 r'Gegenstand(?:\s+des\s+Unternehmens)?[:\s]*(.+?)(?:Stammkapital|Grundkapital|Geschäftsführer|Vorstand|Vertretung|$)',
                 text, re.IGNORECASE | re.DOTALL
@@ -818,22 +770,19 @@ class DetailsParser:
             if purpose_match:
                 details.purpose = purpose_match.group(1).strip()
             
-            # Extract representatives
             details.representatives = cls._extract_representatives_from_text(text)
-            
-            # Try to parse tables as well
             details = cls._parse_si_tables(soup, details)
         
         return details
     
     @classmethod
     def parse_ut(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
-        """Parse company owner information (UT - Unternehmensträger).
+        """Parses company owner information (UT - Unternehmensträger).
         
         The UT view focuses on ownership and shareholder information.
         
         Args:
-            html: The HTML content of the UT detail view.
+            html: HTML content of the UT detail view.
             base_info: Optional base company info from search results.
             
         Returns:
@@ -841,7 +790,6 @@ class DetailsParser:
         """
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Initialize with base info
         details = CompanyDetails(
             name=base_info.get('name', '') if base_info else '',
             register_num=base_info.get('register_num', '') if base_info else '',
@@ -850,36 +798,26 @@ class DetailsParser:
             status=base_info.get('status', '') if base_info else '',
         )
         
-        # Parse any tables for structured data
         details = cls._parse_si_tables(soup, details)
-        
-        # Look for owner/shareholder information
         text = soup.get_text()
         details.owners = cls._extract_owners(text)
-        
-        # Also extract representatives if present
         details.representatives = cls._extract_representatives_from_text(text)
         
         return details
     
     @classmethod
     def _extract_representatives_from_text(cls, text: str) -> list[Representative]:
-        """Extract all representatives from free-form text."""
+        """Extracts all representatives from free-form text."""
         representatives = []
         seen_names = set()
         
-        # Patterns for different representative types
         patterns = [
-            # Geschäftsführer patterns
             (r'Geschäftsführer(?:in)?[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
              'Geschäftsführer'),
-            # Vorstand patterns
             (r'Vorstand[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
              'Vorstand'),
-            # Prokurist patterns
             (r'Prokurist(?:in)?[:\s]*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)', 
              'Prokurist'),
-            # Persönlich haftender Gesellschafter
             (r'Persönlich\s+haftende[r]?\s+Gesellschafter(?:in)?[:\s]*([A-ZÄÖÜ][^\n,;]+)', 
              'Persönlich haftender Gesellschafter'),
         ]
@@ -887,13 +825,11 @@ class DetailsParser:
         for pattern, role in patterns:
             for match in re.finditer(pattern, text):
                 name = match.group(1).strip()
-                # Clean up name
                 name = re.sub(r'\s*\([^)]*\)\s*', '', name).strip()
                 name = re.sub(r'\s+', ' ', name)
                 
                 if name and len(name) > 3 and name not in seen_names:
                     seen_names.add(name)
-                    # Extract location if in parentheses after name in original
                     location = None
                     full_match = match.group(0)
                     loc_match = re.search(r'\(([^)]+)\)', full_match)
@@ -910,19 +846,15 @@ class DetailsParser:
     
     @classmethod
     def _extract_owners(cls, text: str) -> list[Owner]:
-        """Extract owner/shareholder information from text."""
+        """Extracts owner/shareholder information from text."""
         owners = []
         seen_names = set()
         
-        # Patterns for ownership information with owner type
         owner_patterns = [
-            # Gesellschafter with share - capture name until comma or Anteil
             (r'Gesellschafter[:\s]+([^,\n]+?)(?:[,\s]+(?:Anteil|Einlage)[:\s]*([0-9.,]+\s*(?:EUR|€|%)))?(?:\n|$|,)',
              'Gesellschafter'),
-            # Kommanditist
             (r'Kommanditist(?:in)?[:\s]+([^,\n]+?)(?:[,\s]+(?:Anteil|Einlage|Haftsumme)[:\s]*([0-9.,]+\s*(?:EUR|€|%)))?(?:\n|$|,)',
              'Kommanditist'),
-            # Komplementär
             (r'Komplementär(?:in)?[:\s]+([^,\n]+)',
              'Komplementär'),
         ]
@@ -930,7 +862,6 @@ class DetailsParser:
         for pattern, owner_type in owner_patterns:
             for match in re.finditer(pattern, text, re.IGNORECASE):
                 name = match.group(1).strip()
-                # Clean up the name
                 name = re.sub(r'\s+', ' ', name)
                 share = None
                 if len(match.groups()) > 1 and match.group(2):
@@ -952,13 +883,13 @@ class ResultParser:
     
     @staticmethod
     def parse_search_results(html: str) -> list[dict]:
-        """Extract company records from search results HTML.
+        """Extracts company records from search results HTML.
         
         Args:
-            html: The HTML content of the search results page.
+            html: HTML content of the search results page.
             
         Returns:
-            A list of dictionaries, each containing company information.
+            List of dictionaries with company information.
         """
         soup = BeautifulSoup(html, 'html.parser')
         grid = soup.find('table', role='grid')
@@ -977,13 +908,13 @@ class ResultParser:
     
     @staticmethod
     def parse_result_row(row: Tag) -> dict:
-        """Parse a single search result row into a company dictionary.
+        """Parses a single search result row into a company dictionary.
         
         Args:
-            row: A BeautifulSoup Tag representing a table row.
+            row: BeautifulSoup Tag representing a table row.
             
         Returns:
-            A dictionary containing company information.
+            Dictionary containing company information.
             
         Raises:
             ParseError: If the result row has unexpected structure.
@@ -1019,25 +950,21 @@ class ResultParser:
     
     @staticmethod
     def _extract_register_number(court: str, state: str) -> Optional[str]:
-        """Extract and normalize the register number from court string.
+        """Extracts and normalizes the register number from court string.
         
         Args:
-            court: The court field containing the register number.
-            state: The state, used to add appropriate suffix.
+            court: Court field containing the register number.
+            state: State, used to add appropriate suffix.
             
         Returns:
             Normalized register number, or None if not found.
         """
-        # Extract register number: HRB, HRA, VR, GnR followed by numbers
-        # Also capture suffix letter if present (e.g. HRB 12345 B)
         reg_match = re.search(r'(HRA|HRB|GnR|VR|PR)\s*\d+(\s+[A-Z])?(?!\w)', court)
         
         if not reg_match:
             return None
             
         register_num = reg_match.group(0)
-        
-        # Add state-specific suffix if needed
         reg_type = register_num.split()[0]
         suffix = SUFFIX_MAP.get(state, {}).get(reg_type)
         if suffix and not register_num.endswith(suffix):
@@ -1047,7 +974,7 @@ class ResultParser:
     
     @staticmethod
     def _parse_history(cells: list[str]) -> list[tuple[str, str]]:
-        """Parse history entries from cell data.
+        """Parses history entries from cell data.
         
         Args:
             cells: List of cell text content.
@@ -1070,7 +997,7 @@ class ResultParser:
 
 # Backward-compatible function aliases
 def parse_result(result: Tag) -> dict:
-    """Parse a single search result row into a company dictionary.
+    """Parses a single search result row into a company dictionary.
     
     Deprecated: Use ResultParser.parse_result_row() instead.
     """
@@ -1078,7 +1005,7 @@ def parse_result(result: Tag) -> dict:
 
 
 def get_companies_in_searchresults(html: str) -> list[dict]:
-    """Extract company records from search results HTML.
+    """Extracts company records from search results HTML.
     
     Deprecated: Use ResultParser.parse_search_results() instead.
     """
@@ -1092,19 +1019,13 @@ def get_companies_in_searchresults(html: str) -> list[dict]:
 class HandelsRegister:
     """Browser-Automatisierung für die Handelsregister-Suche.
     
-    Diese Klasse verwaltet die Interaktion mit der Handelsregister-Website,
-    einschließlich Navigation, Formular-Übermittlung und Ergebnis-Abruf.
+    Verwaltet die Interaktion mit der Handelsregister-Website, Navigation,
+    Formular-Übermittlung und Ergebnis-Abruf.
     
-    Beispiel (programmatische Nutzung):
+    Beispiel:
         >>> hr = HandelsRegister(debug=False)
         >>> hr.open_startpage()
-        >>> results = hr.search("Deutsche Bahn", keyword_option="all")
-        
-    Beispiel (mit SearchOptions):
-        >>> opts = SearchOptions(keywords="Bank", states=["BE", "HH"])
-        >>> hr = HandelsRegister()
-        >>> hr.open_startpage()
-        >>> results = hr.search_with_options(opts)
+        >>> results = hr.search_with_options(SearchOptions(keywords="Bank", states=["BE"]))
     """
     
     def __init__(
@@ -1147,7 +1068,7 @@ class HandelsRegister:
         return instance
     
     def _create_browser(self, debug: bool = False) -> mechanize.Browser:
-        """Create and configure a mechanize browser instance.
+        """Creates and configures a mechanize browser instance.
         
         Args:
             debug: Enable debug output for HTTP requests.
@@ -1181,11 +1102,11 @@ class HandelsRegister:
     # Backward compatibility: expose cachedir
     @property
     def cachedir(self) -> pathlib.Path:
-        """Get the cache directory path."""
+        """Gets the cache directory path."""
         return self.cache.cache_dir
     
     def open_startpage(self) -> None:
-        """Open the Handelsregister start page.
+        """Opens the Handelsregister start page.
         
         Raises:
             NetworkError: If the connection fails or times out.
@@ -1204,12 +1125,11 @@ class HandelsRegister:
             ) from e
     
     def _build_search_options(self) -> SearchOptions:
-        """Build SearchOptions from command-line arguments.
+        """Builds SearchOptions from command-line arguments.
         
         Returns:
             SearchOptions instance with all search parameters.
         """
-        # Parse state codes if provided
         states = None
         if hasattr(self.args, 'states') and self.args.states:
             states = [s.strip().upper() for s in self.args.states.split(',')]
@@ -1282,7 +1202,7 @@ class HandelsRegister:
         return self.search_with_options(search_opts, force_refresh=force_refresh)
     
     def _fetch_search_results(self, search_opts: SearchOptions) -> str:
-        """Fetch search results from the website.
+        """Fetches search results from the website.
         
         Args:
             search_opts: Search options specifying all search parameters.
@@ -1294,14 +1214,11 @@ class HandelsRegister:
             NetworkError: If network requests fail.
             FormError: If form selection or submission fails.
         """
-        # Navigate to extended search
         self._navigate_to_search()
-        
-        # Submit search form
         return self._submit_search(search_opts)
     
     def _navigate_to_search(self) -> None:
-        """Navigate from start page to extended search form.
+        """Navigates from start page to extended search form.
         
         Raises:
             FormError: If navigation form is not found.
@@ -1332,7 +1249,7 @@ class HandelsRegister:
         logger.debug("Page title after navigation: %s", self.browser.title())
     
     def _submit_search(self, search_opts: SearchOptions) -> str:
-        """Submit the search form and return results HTML.
+        """Submits the search form and returns results HTML.
         
         Args:
             search_opts: Search options specifying all search parameters.
@@ -1351,12 +1268,10 @@ class HandelsRegister:
                 f"Search form not found. The website structure may have changed: {e}"
             ) from e
         
-        # Required: Keywords
         self.browser["form:schlagwoerter"] = search_opts.keywords
         option_id = KEYWORD_OPTIONS.get(search_opts.keyword_option)
         self.browser["form:schlagwortOptionen"] = [str(option_id)]
         
-        # Optional: State filtering
         if search_opts.states:
             for state_code in search_opts.states:
                 if state_code in STATE_CODES:
@@ -1368,7 +1283,6 @@ class HandelsRegister:
                     except mechanize.ControlNotFoundError:
                         logger.warning("State control not found: %s", control_name)
         
-        # Optional: Register type
         if search_opts.register_type:
             try:
                 self.browser["form:registerArt_input"] = [search_opts.register_type]
@@ -1376,7 +1290,6 @@ class HandelsRegister:
             except mechanize.ControlNotFoundError:
                 logger.warning("Register type control not found")
         
-        # Optional: Register number
         if search_opts.register_number:
             try:
                 self.browser["form:registerNummer"] = search_opts.register_number
@@ -1384,7 +1297,6 @@ class HandelsRegister:
             except mechanize.ControlNotFoundError:
                 logger.warning("Register number control not found")
         
-        # Optional: Include deleted entries
         if search_opts.include_deleted:
             try:
                 self.browser.form.find_control("form:auchGeloeschte_input").value = ["on"]
@@ -1392,7 +1304,6 @@ class HandelsRegister:
             except mechanize.ControlNotFoundError:
                 logger.warning("Include deleted control not found")
         
-        # Optional: Similar sounding (phonetic search)
         if search_opts.similar_sounding:
             try:
                 self.browser.form.find_control("form:aenlichLautendeSchlagwoerterBoolChkbox_input").value = ["on"]
@@ -1400,7 +1311,6 @@ class HandelsRegister:
             except mechanize.ControlNotFoundError:
                 logger.warning("Similar sounding control not found")
         
-        # Optional: Results per page
         if search_opts.results_per_page in RESULTS_PER_PAGE_OPTIONS:
             try:
                 self.browser["form:ergebnisseProSeite_input"] = [str(search_opts.results_per_page)]
@@ -1430,7 +1340,7 @@ class HandelsRegister:
         detail_type: str = "SI",
         force_refresh: bool = False,
     ) -> CompanyDetails:
-        """Fetch detailed company information.
+        """Fetches detailed company information.
         
         Args:
             company: Company dict from search results (must contain row_index).
@@ -1448,31 +1358,25 @@ class HandelsRegister:
             ParseError: If parsing fails.
             ValueError: If company dict is missing required fields.
         """
-        # Validate detail_type
         valid_types = ["SI", "AD", "UT", "CD", "HD", "VÖ"]
         if detail_type not in valid_types:
             raise ValueError(f"Invalid detail_type: {detail_type}. Must be one of {valid_types}")
         
-        # Generate cache key for details
         cache_key = f"details:{detail_type}:{company.get('register_num', '')}:{company.get('court', '')}"
         
-        # Try cache first
         if not force_refresh:
             cached_html = self.cache.get(cache_key, "")
             if cached_html is not None:
                 logger.info("Cache hit for details: %s", cache_key)
                 return self._parse_details(cached_html, company, detail_type)
         
-        # Fetch fresh data
         html = self._fetch_detail_page(company, detail_type)
-        
-        # Cache the result
         self.cache.set(cache_key, "", html)
         
         return self._parse_details(html, company, detail_type)
     
     def _fetch_detail_page(self, company: dict, detail_type: str) -> str:
-        """Fetch a detail page for a company.
+        """Fetches a detail page for a company.
         
         The Handelsregister uses JSF/PrimeFaces which requires specific
         form parameters. We reconstruct these based on the search results.
@@ -1486,7 +1390,6 @@ class HandelsRegister:
         """
         row_index = company.get('row_index', 0)
         
-        # Map detail types to form control names
         detail_type_mapping = {
             'AD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:0:fade',
             'CD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:1:fade',
@@ -1500,17 +1403,12 @@ class HandelsRegister:
         control_name = control_name.format(row=row_index)
         
         try:
-            # Try to select the results form
             self.browser.select_form(name="ergebnissForm")
-            
-            # Add the detail link control
             self.browser.form.new_control('hidden', control_name, {'value': control_name})
-            
             response = self.browser.submit()
             return response.read().decode("utf-8")
             
         except mechanize.FormNotFoundError:
-            # Fall back to re-fetching via URL if form not available
             logger.warning("Results form not found, using alternative fetch method")
             return self._fetch_detail_alternative(company, detail_type)
         except urllib.error.URLError as e:
@@ -1523,16 +1421,12 @@ class HandelsRegister:
         """Alternative method to fetch details when form is not available.
         
         This method constructs a direct request based on company information.
-        Note: Full implementation requires JSF viewstate handling.
+        Full implementation requires JSF viewstate handling.
         """
-        # Extract register court and number for direct lookup
-        # These will be used for future direct API access implementation
         register_num = company.get('register_num', '')
-        _court = company.get('court', '')  # Reserved for future use
-        _state = company.get('state', '')  # Reserved for future use
+        _court = company.get('court', '')
+        _state = company.get('state', '')
         
-        # For now, return empty HTML - actual implementation would need
-        # to handle the JSF viewstate properly
         logger.warning(
             "Alternative fetch not fully implemented for %s %s", 
             register_num, detail_type
@@ -1545,7 +1439,7 @@ class HandelsRegister:
         company: dict, 
         detail_type: str
     ) -> CompanyDetails:
-        """Parse detail HTML into CompanyDetails.
+        """Parses detail HTML into CompanyDetails.
         
         Args:
             html: HTML content of detail page.
@@ -1562,7 +1456,6 @@ class HandelsRegister:
         elif detail_type == "UT":
             return DetailsParser.parse_ut(html, company)
         else:
-            # Default to SI parser
             return DetailsParser.parse_si(html, company)
     
     def search_with_details(
@@ -1572,7 +1465,7 @@ class HandelsRegister:
         detail_type: str = "SI",
         force_refresh: bool = False,
     ) -> list[CompanyDetails]:
-        """Search for companies and optionally fetch details.
+        """Searches for companies and optionally fetches details.
         
         Args:
             options: Search options.
@@ -1583,17 +1476,14 @@ class HandelsRegister:
         Returns:
             List of CompanyDetails with full information.
         """
-        # First, perform the search
         companies = self.search_with_options(options, force_refresh=force_refresh)
         
         if not fetch_details:
-            # Return basic CompanyDetails from search results
             return [CompanyDetails.from_company(c) for c in companies]
         
-        # Fetch details for each company
         results: list[CompanyDetails] = []
         for i, company in enumerate(companies):
-            company['row_index'] = i  # Add row index for form submission
+            company['row_index'] = i
             try:
                 details = self.get_company_details(
                     company, 
@@ -1604,29 +1494,27 @@ class HandelsRegister:
             except (NetworkError, ParseError) as e:
                 logger.warning("Failed to fetch details for %s: %s", 
                              company.get('name', 'unknown'), e)
-                # Fall back to basic info
                 results.append(CompanyDetails.from_company(company))
         
         return results
     
-    # Backward compatibility methods
     def _get_cache_key(self, query: str, options: str) -> str:
-        """Generate cache key. Deprecated: use cache.get/set instead."""
+        """Generates cache key. Deprecated: use cache.get/set instead."""
         return self.cache._get_cache_key(query, options)
     
     def _get_cache_path(self, query: str, options: str) -> pathlib.Path:
-        """Get cache path. Deprecated: use cache.get/set instead."""
+        """Gets cache path. Deprecated: use cache.get/set instead."""
         return self.cache._get_cache_path(query, options)
     
     def _load_from_cache(self, query: str, options: str) -> Optional[CacheEntry]:
-        """Load from cache. Deprecated: use cache.get instead."""
+        """Loads from cache. Deprecated: use cache.get instead."""
         html = self.cache.get(query, options)
         if html is None:
             return None
         return CacheEntry(query=query, options=options, timestamp=time.time(), html=html)
     
     def _save_to_cache(self, query: str, options: str, html: str) -> None:
-        """Save to cache. Deprecated: use cache.set instead."""
+        """Saves to cache. Deprecated: use cache.set instead."""
         self.cache.set(query, options, html)
 
 
@@ -1635,10 +1523,10 @@ class HandelsRegister:
 # =============================================================================
 
 def pr_company_info(c: dict) -> None:
-    """Print company information to stdout.
+    """Prints company information to stdout.
     
     Args:
-        c: A dictionary containing company information.
+        c: Dictionary containing company information.
     """
     for tag in ('name', 'court', 'register_num', 'district', 'state', 'statusCurrent'):
         print(f"{tag}: {c.get(tag, '-')}")
@@ -1648,7 +1536,7 @@ def pr_company_info(c: dict) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments.
+    """Parses command-line arguments.
     
     Returns:
         Parsed arguments namespace.
@@ -1759,7 +1647,6 @@ State codes: {state_codes_help}
     
     args = parser.parse_args()
     
-    # Configure logging based on debug flag
     if args.debug:
         logging.basicConfig(
             level=logging.DEBUG,
@@ -1909,13 +1796,10 @@ def get_details(
     hr = HandelsRegister(debug=debug)
     hr.open_startpage()
     
-    # We need to perform a search first to get the session state
-    # Use the company's register number for a targeted search
     register_num = company.get('register_num', '')
     name = company.get('name', '')
     
     if register_num:
-        # Search by register number for precision
         search_opts = SearchOptions(
             keywords=name,
             keyword_option="exact",
@@ -1926,16 +1810,13 @@ def get_details(
             keyword_option="all",
         )
     
-    # Perform search to establish session
     hr.search_with_options(search_opts, force_refresh=force_refresh)
-    
-    # Now fetch details
-    company['row_index'] = 0  # First result
+    company['row_index'] = 0
     return hr.get_company_details(company, detail_type, force_refresh)
 
 
 def pr_company_details(details: CompanyDetails) -> None:
-    """Print detailed company information to stdout.
+    """Prints detailed company information to stdout.
     
     Args:
         details: CompanyDetails object with all information.
@@ -1991,12 +1872,10 @@ def main() -> int:
         hr = HandelsRegister(args)
         hr.open_startpage()
         
-        # Check if we should fetch details
         fetch_details = getattr(args, 'details', False)
         detail_type = getattr(args, 'detail_type', 'SI')
         
         if fetch_details:
-            # Build search options
             search_opts = hr._build_search_options()
             companies_details = hr.search_with_details(
                 search_opts,
@@ -2012,7 +1891,6 @@ def main() -> int:
                     for details in companies_details:
                         pr_company_details(details)
         else:
-            # Standard search without details
             companies = hr.search_company()
             
             if companies:

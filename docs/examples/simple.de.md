@@ -38,7 +38,7 @@ firmen = search(
     keywords="Consulting",
     states=["HH"],
     register_type="HRB",
-    only_active=True
+    include_deleted=False
 )
 ```
 
@@ -48,7 +48,7 @@ firmen = search(
 from handelsregister import search
 
 # Exakten Firmennamen suchen
-firmen = search("GASAG AG", exact=True)
+firmen = search("GASAG AG", keyword_option="exact")
 
 if firmen:
     print(f"Gefunden: {firmen[0]['name']}")
@@ -65,13 +65,13 @@ else:
 ```python
 from handelsregister import search
 
-firmen = search("Siemens AG", exact=True)
+firmen = search("Siemens AG", keyword_option="exact")
 
 if firmen:
     firma = firmen[0]
     
     print(f"Name: {firma['name']}")
-    print(f"Gericht: {firma['register_court']}")
+    print(f"Gericht: {firma['court']}")
     print(f"Nummer: {firma['register_num']}")
     print(f"Status: {firma['status']}")
     print(f"Bundesland: {firma['state']}")
@@ -113,7 +113,7 @@ grosse_banken = [
 from handelsregister import search, get_details
 
 # Nach Unternehmen suchen
-firmen = search("GASAG AG", exact=True)
+firmen = search("GASAG AG", keyword_option="exact")
 
 if firmen:
     # Vollständige Details abrufen
@@ -128,7 +128,7 @@ if firmen:
 ```python
 from handelsregister import search, get_details
 
-firmen = search("GASAG AG", exact=True)
+firmen = search("GASAG AG", keyword_option="exact")
 details = get_details(firmen[0])
 
 if details.address:
@@ -141,7 +141,7 @@ if details.address:
 ```python
 from handelsregister import search, get_details
 
-firmen = search("Deutsche Bahn AG", exact=True)
+firmen = search("Deutsche Bahn AG", keyword_option="exact")
 details = get_details(firmen[0])
 
 print("Geschäftsführung:")

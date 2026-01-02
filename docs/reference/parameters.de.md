@@ -9,7 +9,7 @@ Vollständige Referenz aller Parameter für die `search()`-Funktion.
 | `keywords` | `str` | Erforderlich | Suchbegriff für Firmennamen |
 | `states` | `List[str]` | `None` | Nach Bundesländern filtern |
 | `register_type` | `str` | `None` | Nach Registerart filtern |
-| `register_court` | `str` | `None` | Spezifisches Registergericht |
+| `court` | `str` | `None` | Spezifisches Registergericht |
 | `register_number` | `str` | `None` | Spezifische Registernummer |
 | `only_active` | `bool` | `False` | Nur aktuell eingetragene |
 | `exact` | `bool` | `False` | Exakte Namensübereinstimmung |
@@ -85,16 +85,16 @@ search("Wohnungsbau", register_type="GnR")
 
 ---
 
-### register_court
+### court
 
 Nach spezifischem Registergericht filtern.
 
 ```python
 # Nur Berlin Charlottenburg
-search("Bank", register_court="Berlin (Charlottenburg)")
+search("Bank", court="Berlin (Charlottenburg)")
 
 # Nur München
-search("Bank", register_court="München")
+search("Bank", court="München")
 ```
 
 **Typ:** `str` oder `None`
@@ -113,7 +113,7 @@ search("", register_number="HRB 12345")
 
 # Kombiniert mit Gericht
 search("", 
-       register_court="Berlin (Charlottenburg)", 
+       court="Berlin (Charlottenburg)", 
        register_number="HRB 44343")
 ```
 
@@ -127,10 +127,10 @@ Nur nach aktuell eingetragenen Unternehmen filtern.
 
 ```python
 # Nur aktive Unternehmen
-search("Bank", only_active=True)
+search("Bank", include_deleted=False)
 
 # Gelöschte/fusionierte einschließen (Standard)
-search("Bank", only_active=False)
+search("Bank", include_deleted=True)
 ```
 
 **Typ:** `bool`
@@ -145,7 +145,7 @@ Exakte Namensübereinstimmung statt Teilübereinstimmung erfordern.
 
 ```python
 # Exakte Übereinstimmung - findet nur "GASAG AG"
-search("GASAG AG", exact=True)
+search("GASAG AG", keyword_option="exact")
 
 # Teilübereinstimmung - findet "GASAG AG", "GASAG Beteiligungs GmbH", etc.
 search("GASAG", exact=False)
@@ -180,10 +180,10 @@ Ob gecachte Ergebnisse verwendet werden sollen.
 
 ```python
 # Cache verwenden (Standard)
-search("Bank", use_cache=True)
+search("Bank", force_refresh=False)
 
 # Immer frische Daten abrufen
-search("Bank", use_cache=False)
+search("Bank", force_refresh=True)
 ```
 
 **Typ:** `bool`
@@ -202,12 +202,12 @@ firmen = search(
     keywords="Bank",              # Suche nach "Bank"
     states=["BE", "HH"],          # In Berlin und Hamburg
     register_type="HRB",          # Nur Kapitalgesellschaften
-    register_court=None,          # Beliebiges Gericht
+    court=None,          # Beliebiges Gericht
     register_number=None,         # Beliebige Nummer
-    only_active=True,             # Nur aktive Unternehmen
+    include_deleted=False,             # Nur aktive Unternehmen
     exact=False,                  # Teilübereinstimmung OK
     similar_sounding=False,       # Keine phonetische Suche
-    use_cache=True,               # Cache verwenden
+    force_refresh=False,               # Cache verwenden
 )
 
 print(f"Gefunden: {len(firmen)} Unternehmen")
@@ -224,7 +224,7 @@ print(f"Gefunden: {len(firmen)} Unternehmen")
 | `register_type` | `--register-type` |
 | `only_active` | `--active-only` |
 | `exact` | `--exact` |
-| `use_cache=False` | `--no-cache` |
+| `force_refresh=True` | `--no-cache` |
 
 ```bash
 handelsregister \

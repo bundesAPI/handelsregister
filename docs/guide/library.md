@@ -17,7 +17,7 @@ companies = search("Deutsche Bahn")
 # Process results
 for company in companies:
     print(f"Name: {company['name']}")
-    print(f"Court: {company['register_court']}")
+    print(f"Court: {company['court']}")
     print(f"Number: {company['register_num']}")
     print(f"Status: {company['status']}")
     print("---")
@@ -30,11 +30,13 @@ The function returns a list of dictionaries with the following keys:
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | `str` | Company name |
-| `register_court` | `str` | Register court |
-| `register_num` | `str` | Register number (e.g., "HRB 12345") |
+| `court` | `str` | Register court |
+| `register_num` | `str` | Register number (e.g., "HRB 12345 B") |
+| `state` | `str` | State name (e.g., "Berlin") |
 | `status` | `str` | Registration status |
-| `state` | `str` | State code (e.g., "BE") |
-| `history` | `list` | List of historical entries |
+| `statusCurrent` | `str` | Normalized status (e.g., "CURRENTLY_REGISTERED") |
+| `documents` | `str` | Available document types |
+| `history` | `list` | List of (name, location) tuples with historical entries |
 
 ---
 
@@ -45,14 +47,15 @@ The function returns a list of dictionaries with the following keys:
 ```python
 companies = search(
     keywords="Bank",              # Search term (required)
+    keyword_option="all",         # How to match: "all", "min", or "exact"
     states=["BE", "HH"],          # Filter by states
     register_type="HRB",          # Filter by register type
-    register_court="Berlin",      # Specific register court
     register_number="12345",      # Specific register number
-    only_active=True,             # Only currently registered
-    exact=False,                  # Exact name match
-    use_cache=True,               # Use caching
+    include_deleted=False,        # Only currently registered
     similar_sounding=False,       # Include similar-sounding names
+    results_per_page=100,         # Results per page
+    force_refresh=False,          # Use caching
+    debug=False,                  # Debug logging
 )
 ```
 
@@ -95,26 +98,29 @@ search("KG", register_type="HRA")
 
 See [Register Types](../reference/registers.md) for all types.
 
-#### `only_active`
-Filter for currently registered companies:
+#### `keyword_option`
+How to match keywords:
 
 ```python
-# Only active companies
-search("Bank", only_active=True)
+# All keywords must match (default)
+search("Deutsche Bank", keyword_option="all")
 
-# Include deleted/merged companies
-search("Bank", only_active=False)
+# At least one keyword must match
+search("Deutsche Bank", keyword_option="min")
+
+# Exact name match
+search("GASAG AG", keyword_option="exact")
 ```
 
-#### `exact`
-Require exact name match:
+#### `include_deleted`
+Include deleted/historical entries:
 
 ```python
-# Exact match only
-search("GASAG AG", exact=True)
+# Only currently registered (default)
+search("Bank", include_deleted=False)
 
-# Partial matches allowed (default)
-search("GASAG", exact=False)
+# Include deleted/merged companies
+search("Bank", include_deleted=True)
 ```
 
 ---
@@ -164,7 +170,7 @@ companies = search("Bank", states=["BE"])
 df = pd.DataFrame(companies)
 
 # Analyze
-print(df.groupby('register_court').size())
+print(df.groupby('court').size())
 ```
 
 ---
@@ -209,7 +215,7 @@ results = hr.search("Bank")
 
 ```python
 # Disable cache for this search
-companies = search("Bank", use_cache=False)
+companies = search("Bank", force_refresh=True)
 
 # Or globally
 hr = HandelsRegister(cache=None)
