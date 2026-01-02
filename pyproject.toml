@@ -40,7 +40,7 @@ Repository = "https://github.com/bundesAPI/handelsregister"
 Issues = "https://github.com/bundesAPI/handelsregister/issues"
 
 [project.scripts]
-handelsregister = "handelsregister:main"
+handelsregister = "handelsregister.cli:main"
 
 [build-system]
 requires = ["hatchling"]
