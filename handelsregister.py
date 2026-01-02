@@ -31,6 +31,7 @@ from bs4.element import Tag
 from dateutil import parser as dateutil_parser
 from dateutil.parser import ParserError
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from ratelimit import limits, sleep_and_retry
 from tenacity import (
     retry,
@@ -49,15 +50,81 @@ logger = logging.getLogger(__name__)
 # Configuration
 # =============================================================================
 
-DEFAULT_CACHE_TTL_SECONDS: int = 3600  # 1 hour default TTL for search results
-DETAILS_CACHE_TTL_SECONDS: int = 86400  # 24 hours TTL for company details
-BASE_URL: URL = URL("https://www.handelsregister.de")
-REQUEST_TIMEOUT: int = 10
-MAX_RETRIES: int = 3  # Maximum number of retry attempts for network requests
-RETRY_WAIT_MIN: int = 2  # Minimum wait time between retries in seconds
-RETRY_WAIT_MAX: int = 10  # Maximum wait time between retries in seconds
-RATE_LIMIT_CALLS: int = 60  # Maximum requests per hour (per portal terms of service)
-RATE_LIMIT_PERIOD: int = 3600  # Rate limit period in seconds (1 hour)
+# =============================================================================
+# Settings (pydantic-settings)
+# =============================================================================
+
+class Settings(BaseSettings):
+    """Centralized configuration for the Handelsregister client.
+    
+    All settings can be overridden via environment variables with the
+    HRG_ prefix. For example:
+    
+        export HRG_CACHE_TTL_SECONDS=7200
+        export HRG_DEBUG=true
+        export HRG_CACHE_DIR=/tmp/hr-cache
+    
+    Attributes:
+        cache_ttl_seconds: TTL for search result cache (default: 1 hour).
+        details_ttl_seconds: TTL for details cache (default: 24 hours).
+        base_url: Base URL for the Handelsregister portal.
+        request_timeout: HTTP request timeout in seconds.
+        max_retries: Maximum retry attempts for failed requests.
+        retry_wait_min: Minimum wait between retries in seconds.
+        retry_wait_max: Maximum wait between retries in seconds.
+        rate_limit_calls: Maximum requests per rate limit period.
+        rate_limit_period: Rate limit period in seconds (default: 1 hour).
+        cache_dir: Optional custom cache directory path.
+        debug: Enable debug logging.
+    """
+    model_config = SettingsConfigDict(
+        env_prefix="HRG_",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+    
+    # Cache settings
+    cache_ttl_seconds: int = Field(default=3600, description="TTL for search cache in seconds")
+    details_ttl_seconds: int = Field(default=86400, description="TTL for details cache in seconds")
+    cache_dir: Optional[str] = Field(default=None, description="Custom cache directory path")
+    
+    # Network settings
+    base_url: str = Field(default="https://www.handelsregister.de", description="Base URL")
+    request_timeout: int = Field(default=10, ge=1, le=60, description="Request timeout in seconds")
+    
+    # Retry settings
+    max_retries: int = Field(default=3, ge=1, le=10, description="Maximum retry attempts")
+    retry_wait_min: int = Field(default=2, ge=1, description="Minimum retry wait in seconds")
+    retry_wait_max: int = Field(default=10, ge=1, description="Maximum retry wait in seconds")
+    
+    # Rate limiting (per portal terms of service: max 60 requests/hour)
+    rate_limit_calls: int = Field(default=60, ge=1, description="Max requests per period")
+    rate_limit_period: int = Field(default=3600, description="Rate limit period in seconds")
+    
+    # Debug settings
+    debug: bool = Field(default=False, description="Enable debug logging")
+    
+    @property
+    def base_url_parsed(self) -> URL:
+        """Returns base_url as a yarl.URL object."""
+        return URL(self.base_url)
+
+
+# Initialize global settings (can be overridden by environment variables)
+settings = Settings()
+
+# Backward-compatible constants (use settings.xxx for new code)
+DEFAULT_CACHE_TTL_SECONDS: int = settings.cache_ttl_seconds
+DETAILS_CACHE_TTL_SECONDS: int = settings.details_ttl_seconds
+BASE_URL: URL = settings.base_url_parsed
+REQUEST_TIMEOUT: int = settings.request_timeout
+MAX_RETRIES: int = settings.max_retries
+RETRY_WAIT_MIN: int = settings.retry_wait_min
+RETRY_WAIT_MAX: int = settings.retry_wait_max
+RATE_LIMIT_CALLS: int = settings.rate_limit_calls
+RATE_LIMIT_PERIOD: int = settings.rate_limit_period
 
 
 def build_url(path: str = "", **query_params) -> URL:
@@ -440,15 +507,21 @@ class SearchCache:
         """Initialize the cache.
         
         Args:
-            cache_dir: Directory to store cache files. Defaults to temp directory.
+            cache_dir: Directory to store cache files. Defaults to settings.cache_dir
+                      or temp directory if not configured.
             ttl_seconds: Time-to-live for search result cache entries in seconds.
             details_ttl_seconds: Time-to-live for details cache entries in seconds.
         """
         self.ttl_seconds = ttl_seconds
         self.details_ttl_seconds = details_ttl_seconds
-        self.cache_dir = cache_dir or (
-            pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
-        )
+        
+        # Use provided cache_dir, settings.cache_dir, or temp directory
+        if cache_dir is not None:
+            self.cache_dir = cache_dir
+        elif settings.cache_dir:
+            self.cache_dir = pathlib.Path(settings.cache_dir)
+        else:
+            self.cache_dir = pathlib.Path(tempfile.gettempdir()) / "handelsregister_cache"
         # Initialize DiskCache with size limit (500MB default)
         self._cache = diskcache.Cache(
             str(self.cache_dir),

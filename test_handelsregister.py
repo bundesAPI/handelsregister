@@ -28,8 +28,10 @@ from handelsregister import (
     ResultParser,
     SearchCache,
     SearchOptions,
+    Settings,
     build_url,
     get_companies_in_searchresults,
+    settings,
     get_details,
     parse_result,
     search,
@@ -643,6 +645,53 @@ class TestConfiguration:
         assert 'GnR' in REGISTER_TYPES
         assert 'VR' in REGISTER_TYPES
         assert 'PR' in REGISTER_TYPES
+
+
+class TestSettings:
+    """Unit tests for pydantic-settings configuration."""
+    
+    def test_settings_instance_exists(self):
+        """Test that global settings instance exists."""
+        assert settings is not None
+        assert isinstance(settings, Settings)
+    
+    def test_settings_default_values(self):
+        """Test that default settings values are correct."""
+        s = Settings()
+        assert s.cache_ttl_seconds == 3600
+        assert s.details_ttl_seconds == 86400
+        assert s.request_timeout == 10
+        assert s.max_retries == 3
+        assert s.rate_limit_calls == 60
+        assert s.rate_limit_period == 3600
+        assert s.debug is False
+    
+    def test_settings_base_url_parsed(self):
+        """Test that base_url_parsed returns a yarl URL."""
+        from yarl import URL
+        s = Settings()
+        assert isinstance(s.base_url_parsed, URL)
+        assert str(s.base_url_parsed) == "https://www.handelsregister.de"
+    
+    def test_settings_env_prefix(self):
+        """Test that settings uses correct env prefix."""
+        assert Settings.model_config.get('env_prefix') == "HRG_"
+    
+    def test_settings_custom_values(self):
+        """Test creating Settings with custom values."""
+        s = Settings(
+            cache_ttl_seconds=7200,
+            max_retries=5,
+            debug=True,
+        )
+        assert s.cache_ttl_seconds == 7200
+        assert s.max_retries == 5
+        assert s.debug is True
+    
+    def test_settings_cache_dir(self):
+        """Test that cache_dir defaults to None."""
+        s = Settings()
+        assert s.cache_dir is None
 
 
 class TestURLHandling:
