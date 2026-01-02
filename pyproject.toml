@@ -16,6 +16,7 @@ dependencies = [
     "diskcache>=5.6.0",
     "pydantic>=2.0.0",
     "tenacity>=8.2.0",
+    "ratelimit>=2.2.1",
 ]
 
 [project.optional-dependencies]

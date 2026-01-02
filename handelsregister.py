@@ -30,6 +30,7 @@ import mechanize
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+from ratelimit import limits, sleep_and_retry
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -53,6 +54,8 @@ REQUEST_TIMEOUT: int = 10
 MAX_RETRIES: int = 3  # Maximum number of retry attempts for network requests
 RETRY_WAIT_MIN: int = 2  # Minimum wait time between retries in seconds
 RETRY_WAIT_MAX: int = 10  # Maximum wait time between retries in seconds
+RATE_LIMIT_CALLS: int = 60  # Maximum requests per hour (per portal terms of service)
+RATE_LIMIT_PERIOD: int = 3600  # Rate limit period in seconds (1 hour)
 
 # Mapping of keyword option names to form values
 KEYWORD_OPTIONS: dict[str, int] = {
@@ -1105,6 +1108,8 @@ class HandelsRegister:
         """Gets the cache directory path."""
         return self.cache.cache_dir
     
+    @sleep_and_retry
+    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
@@ -1116,6 +1121,7 @@ class HandelsRegister:
         """Opens the Handelsregister start page with automatic retries.
         
         Uses exponential backoff for retries on network failures.
+        Rate limited to 60 requests per hour per portal terms of service.
         
         Raises:
             NetworkError: If the connection fails after all retry attempts.
@@ -1226,6 +1232,8 @@ class HandelsRegister:
         self._navigate_to_search()
         return self._submit_search(search_opts)
     
+    @sleep_and_retry
+    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
@@ -1237,6 +1245,7 @@ class HandelsRegister:
         """Navigates from start page to extended search form with retries.
         
         Uses exponential backoff for retries on network failures.
+        Rate limited to 60 requests per hour per portal terms of service.
         
         Raises:
             FormError: If navigation form is not found.
@@ -1266,6 +1275,8 @@ class HandelsRegister:
         
         logger.debug("Page title after navigation: %s", self.browser.title())
     
+    @sleep_and_retry
+    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
@@ -1277,6 +1288,7 @@ class HandelsRegister:
         """Submits the search form and returns results HTML with retries.
         
         Uses exponential backoff for retries on network failures.
+        Rate limited to 60 requests per hour per portal terms of service.
         
         Args:
             search_opts: Search options specifying all search parameters.
@@ -1402,6 +1414,8 @@ class HandelsRegister:
         
         return self._parse_details(html, company, detail_type)
     
+    @sleep_and_retry
+    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
@@ -1415,6 +1429,7 @@ class HandelsRegister:
         The Handelsregister uses JSF/PrimeFaces which requires specific
         form parameters. We reconstruct these based on the search results.
         Uses exponential backoff for retries on network failures.
+        Rate limited to 60 requests per hour per portal terms of service.
         
         Args:
             company: Company dict with at least 'row_index' from search.
