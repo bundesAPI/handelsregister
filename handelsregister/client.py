@@ -161,12 +161,13 @@ class HandelsRegister:
             self.browser.open(str(BASE_URL), timeout=REQUEST_TIMEOUT)
         except urllib.error.URLError as e:
             raise NetworkError(
-                f"Failed to connect to handelsregister.de: {e.reason}",
+                f"Failed to connect to {BASE_URL}: {e.reason}. "
+                f"Please check your internet connection and try again.",
                 original_error=e
             ) from e
         except mechanize.BrowserStateError as e:
             raise NetworkError(
-                f"Browser state error: {e}",
+                f"Browser state error while opening {BASE_URL}: {e}",
                 original_error=e
             ) from e
     
@@ -277,8 +278,11 @@ class HandelsRegister:
         try:
             self.browser.select_form(name="naviForm")
         except mechanize.FormNotFoundError as e:
+            current_url = self.browser.geturl() if hasattr(self.browser, 'geturl') else 'unknown'
             raise FormError(
-                f"Navigation form not found. The website structure may have changed: {e}"
+                f"Navigation form 'naviForm' not found on page {current_url}. "
+                f"The website structure may have changed: {e}",
+                original_error=e
             ) from e
         
         self.browser.form.new_control(
@@ -318,8 +322,11 @@ class HandelsRegister:
         try:
             self.browser.select_form(name="form")
         except mechanize.FormNotFoundError as e:
+            current_url = self.browser.geturl() if hasattr(self.browser, 'geturl') else 'unknown'
             raise FormError(
-                f"Search form not found. The website structure may have changed: {e}"
+                f"Search form 'form' not found on page {current_url}. "
+                f"The website structure may have changed: {e}",
+                original_error=e
             ) from e
         
         self.browser["form:schlagwoerter"] = search_opts.keywords
