@@ -220,13 +220,8 @@ class CompanyDetails(BaseModel):
     
     def to_dict(self) -> dict:
         """Converts to dictionary for JSON serialization (backward compatibility)."""
-        data = self.model_dump(exclude={'raw_data'})
-        # Convert nested models to dicts
-        if self.address:
-            data['address'] = self.address.to_dict()
-        data['representatives'] = [r.to_dict() for r in self.representatives]
-        data['owners'] = [o.to_dict() for o in self.owners]
-        return data
+        # Pydantic's model_dump() automatically handles nested models
+        return self.model_dump(exclude={'raw_data'}, mode='python')
     
     @classmethod
     def from_company(cls, company: Union['Company', dict[str, Any]]) -> 'CompanyDetails':
@@ -278,16 +273,10 @@ class Company(BaseModel):
 
     def to_dict(self) -> dict:
         """Converts to dictionary for backward compatibility."""
-        return {
-            'court': self.court,
-            'register_num': self.register_num,
-            'name': self.name,
-            'state': self.state,
-            'status': self.status,
-            'statusCurrent': self.status_normalized,
-            'documents': self.documents,
-            'history': [(h.name, h.location) for h in self.history]
-        }
+        data = self.model_dump(by_alias=True, exclude={'row_index'})
+        # Convert history from HistoryEntry objects to tuples for backward compatibility
+        data['history'] = [(h.name, h.location) for h in self.history]
+        return data
     
     def get(self, key: str, default: Any = None) -> Any:
         """Dict-like access for backward compatibility."""
