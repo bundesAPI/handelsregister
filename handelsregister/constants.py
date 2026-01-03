@@ -1,5 +1,7 @@
 """Constants and configuration for the Handelsregister package."""
 
+from typing import Optional
+
 from yarl import URL
 
 # Mapping of keyword option names to form values
@@ -41,7 +43,7 @@ RESULTS_PER_PAGE_OPTIONS: list[int] = [10, 25, 50, 100]
 schlagwortOptionen = KEYWORD_OPTIONS  # noqa: N816
 
 
-def build_url(path: str = "", base_url: URL | None = None, **query_params) -> URL:
+def build_url(path: str = "", base_url: Optional[URL] = None, **query_params) -> URL:
     """Builds a URL from BASE_URL with path and optional query parameters.
 
     Uses yarl for safe URL construction with proper encoding.
