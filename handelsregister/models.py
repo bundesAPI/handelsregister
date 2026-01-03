@@ -6,7 +6,13 @@ from typing import Any, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .constants import RESULTS_PER_PAGE_OPTIONS, STATE_CODES
+from .constants import (
+    RESULTS_PER_PAGE_OPTIONS,
+    STATE_CODES,
+    KeywordMatch,
+    RegisterType,
+    State,
+)
 from .settings import DEFAULT_CACHE_TTL_SECONDS
 
 
@@ -60,38 +66,68 @@ class SearchOptions(BaseModel):
 
     Attributes:
         keywords: Search keywords (schlagwoerter).
-        keyword_option: How to match keywords (all, min, exact).
-        states: List of state codes to filter by (e.g., ['BE', 'HH']).
-        register_type: Register type filter (HRA, HRB, GnR, PR, VR).
+        keyword_option: How to match keywords (all, min, exact). Can be KeywordMatch enum or string.
+        states: List of state codes to filter by (e.g., ['BE', 'HH']). Can be State enum or string.
+        register_type: Register type filter (HRA, HRB, GnR, PR, VR). Can be RegisterType enum or string.
         register_number: Specific register number to search for.
         include_deleted: Include deleted/historical entries.
         similar_sounding: Use phonetic/similarity search.
-        results_per_page: Number of results per page (10, 25, 50, 100).
+        results_per_page: Number of results per page (10, 25, 50, 100). Must be in RESULTS_PER_PAGE_OPTIONS.
     """
 
     model_config = ConfigDict(frozen=False, validate_assignment=True)
 
     keywords: str = Field(..., min_length=1, description="Search keywords")
-    keyword_option: str = Field(default="all", pattern="^(all|min|exact)$")
-    states: Optional[list[str]] = Field(default=None, description="State codes to filter by")
-    register_type: Optional[str] = Field(default=None, pattern="^(HRA|HRB|GnR|PR|VR)$")
+    keyword_option: Union[str, KeywordMatch] = Field(default="all", pattern="^(all|min|exact)$")
+    states: Optional[list[Union[str, State]]] = Field(
+        default=None, description="State codes to filter by"
+    )
+    register_type: Optional[Union[str, RegisterType]] = Field(
+        default=None, pattern="^(HRA|HRB|GnR|PR|VR)$"
+    )
     register_number: Optional[str] = None
     include_deleted: bool = False
     similar_sounding: bool = False
     results_per_page: int = Field(default=100, ge=10, le=100)
 
-    @field_validator("states")
+    @field_validator("keyword_option", mode="before")
     @classmethod
-    def validate_states(cls, v: Optional[list[str]]) -> Optional[list[str]]:
-        """Validates state codes against known values."""
+    def validate_keyword_option(cls, v: Union[str, KeywordMatch]) -> str:
+        """Accepts both KeywordMatch enum and string."""
+        if isinstance(v, KeywordMatch):
+            return v.value
+        return v
+
+    @field_validator("states", mode="before")
+    @classmethod
+    def validate_states(cls, v: Optional[list[Union[str, State]]]) -> Optional[list[str]]:
+        """Validates state codes against known values. Accepts both State enum and string."""
         if v is None:
             return None
         valid_codes = set(STATE_CODES.keys())
+        result = []
         for state in v:
-            if state.upper() not in valid_codes:
-                error_msg = f"Invalid state code: {state}. Valid: {', '.join(sorted(valid_codes))}"
+            # Extract value from enum if needed
+            state_value = state.value if isinstance(state, State) else state
+            state_upper = state_value.upper()
+            if state_upper not in valid_codes:
+                error_msg = (
+                    f"Invalid state code: {state_value}. "
+                    f"Valid: {', '.join(sorted(valid_codes))}"
+                )
                 raise ValueError(error_msg)
-        return [s.upper() for s in v]
+            result.append(state_upper)
+        return result
+
+    @field_validator("register_type", mode="before")
+    @classmethod
+    def validate_register_type(cls, v: Optional[Union[str, RegisterType]]) -> Optional[str]:
+        """Accepts both RegisterType enum and string."""
+        if v is None:
+            return None
+        if isinstance(v, RegisterType):
+            return v.value
+        return v
 
     @field_validator("results_per_page")
     @classmethod

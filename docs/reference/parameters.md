@@ -7,9 +7,9 @@ Complete reference of all parameters for the `search()` function.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `keywords` | `str` | Required | Search term for company names |
-| `keyword_option` | `str` | `"all"` | How to match keywords: "all", "min", or "exact" |
-| `states` | `List[str]` | `None` | Filter by federal states |
-| `register_type` | `str` | `None` | Filter by register type |
+| `keyword_option` | `KeywordMatch` or `str` | `"all"` | How to match keywords: "all", "min", or "exact" |
+| `states` | `List[State]` or `List[str]` | `None` | Filter by federal states |
+| `register_type` | `RegisterType` or `str` | `None` | Filter by register type |
 | `register_number` | `str` | `None` | Specific register number |
 | `include_deleted` | `bool` | `False` | Include deleted/historical entries |
 | `similar_sounding` | `bool` | `False` | Include similar-sounding names |
@@ -49,19 +49,27 @@ search("Deutsche")  # Finds "Deutsche Bahn", "Deutsche Bank", etc.
 List of state codes to filter results. See [State Codes](states.md).
 
 ```python
-# Single state
-search("Bank", states=["BE"])
+from handelsregister import search, State
 
-# Multiple states
+# Single state (recommended: Enum)
+search("Bank", states=[State.BE])
+
+# Multiple states (recommended: Enums)
+search("Bank", states=[State.BE, State.HH, State.BY])
+
+# String-based API still works
+search("Bank", states=["BE"])
 search("Bank", states=["BE", "HH", "BY"])
 
 # All states (default - don't specify)
 search("Bank")
 ```
 
-**Type:** `List[str]` or `None`
+**Type:** `List[State]` or `List[str]` or `None`
 
 **Valid values:** `BW`, `BY`, `BE`, `BB`, `HB`, `HH`, `HE`, `MV`, `NI`, `NW`, `RP`, `SL`, `SN`, `ST`, `SH`, `TH`
+
+**Recommended:** Use `State` enum for IDE autocomplete: `State.BE`, `State.HH`, etc.
 
 ---
 
@@ -70,19 +78,26 @@ search("Bank")
 Filter by register type. See [Register Types](registers.md).
 
 ```python
-# Only corporations (GmbH, AG)
-search("Bank", register_type="HRB")
+from handelsregister import search, RegisterType
+
+# Only corporations (GmbH, AG) - recommended: Enum
+search("Bank", register_type=RegisterType.HRB)
 
 # Only partnerships (KG, OHG)
-search("Consulting", register_type="HRA")
+search("Consulting", register_type=RegisterType.HRA)
 
 # Cooperatives
-search("Wohnungsbau", register_type="GnR")
+search("Wohnungsbau", register_type=RegisterType.GnR)
+
+# String-based API still works
+search("Bank", register_type="HRB")
 ```
 
-**Type:** `str` or `None`
+**Type:** `RegisterType` or `str` or `None`
 
 **Valid values:** `HRA`, `HRB`, `GnR`, `PR`, `VR`
+
+**Recommended:** Use `RegisterType` enum for IDE autocomplete: `RegisterType.HRB`, `RegisterType.HRA`, etc.
 
 ---
 
@@ -91,21 +106,29 @@ search("Wohnungsbau", register_type="GnR")
 How to match keywords in the search.
 
 ```python
-# All keywords must match (default)
-search("Deutsche Bank", keyword_option="all")
+from handelsregister import search, KeywordMatch
+
+# All keywords must match (default) - recommended: Enum
+search("Deutsche Bank", keyword_option=KeywordMatch.ALL)
 
 # At least one keyword must match
-search("Deutsche Bank", keyword_option="min")
+search("Deutsche Bank", keyword_option=KeywordMatch.MIN)
 
 # Exact name match
+search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-based API still works
+search("Deutsche Bank", keyword_option="all")
 search("GASAG AG", keyword_option="exact")
 ```
 
-**Type:** `str`
+**Type:** `KeywordMatch` or `str`
 
-**Default:** `"all"`
+**Default:** `"all"` or `KeywordMatch.ALL`
 
-**Valid values:** `"all"`, `"min"`, `"exact"`
+**Valid values:** `"all"` / `KeywordMatch.ALL`, `"min"` / `KeywordMatch.MIN`, `"exact"` / `KeywordMatch.EXACT`
+
+**Recommended:** Use `KeywordMatch` enum for IDE autocomplete: `KeywordMatch.ALL`, `KeywordMatch.EXACT`, etc.
 
 ---
 
@@ -216,20 +239,34 @@ search("Bank", debug=True)
 ## Complete Example
 
 ```python
-from handelsregister import search
+from handelsregister import search, State, KeywordMatch, RegisterType
 
-# Full example with all parameters
+# Full example with all parameters (recommended: Enums)
 companies = search(
-    keywords="Bank",              # Search for "Bank"
-    keyword_option="all",         # All keywords must match
-    states=["BE", "HH"],          # In Berlin and Hamburg
-    register_type="HRB",          # Only corporations
-    register_number=None,         # Any number
-    include_deleted=False,        # Only active companies
-    similar_sounding=False,        # No phonetic search
-    results_per_page=100,         # Maximum results
-    force_refresh=False,          # Use cache
-    debug=False,                  # No debug output
+    keywords="Bank",                      # Search for "Bank"
+    keyword_option=KeywordMatch.ALL,     # All keywords must match
+    states=[State.BE, State.HH],         # In Berlin and Hamburg
+    register_type=RegisterType.HRB,      # Only corporations
+    register_number=None,                # Any number
+    include_deleted=False,               # Only active companies
+    similar_sounding=False,              # No phonetic search
+    results_per_page=100,                # Maximum results
+    force_refresh=False,                 # Use cache
+    debug=False,                         # No debug output
+)
+
+# String-based API still works
+companies = search(
+    keywords="Bank",
+    keyword_option="all",
+    states=["BE", "HH"],
+    register_type="HRB",
+    register_number=None,
+    include_deleted=False,
+    similar_sounding=False,
+    results_per_page=100,
+    force_refresh=False,
+    debug=False,
 )
 
 print(f"Found: {len(companies)} companies")

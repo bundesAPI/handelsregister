@@ -20,9 +20,12 @@ for company in companies:
 ### Search with State Filter
 
 ```python
-from handelsregister import search
+from handelsregister import search, State
 
-# Search for banks in Berlin
+# Search for banks in Berlin (recommended: Enum)
+banks = search("Bank", states=[State.BE])
+
+# String-based API still works
 banks = search("Bank", states=["BE"])
 
 print(f"Banks in Berlin: {len(banks)}")
@@ -31,9 +34,17 @@ print(f"Banks in Berlin: {len(banks)}")
 ### Search with Multiple Filters
 
 ```python
-from handelsregister import search
+from handelsregister import search, State, RegisterType
 
-# Active GmbHs in Hamburg
+# Active GmbHs in Hamburg (recommended: Enums)
+companies = search(
+    keywords="Consulting",
+    states=[State.HH],
+    register_type=RegisterType.HRB,
+    include_deleted=False
+)
+
+# String-based API still works
 companies = search(
     keywords="Consulting",
     states=["HH"],
@@ -45,9 +56,12 @@ companies = search(
 ### Exact Name Search
 
 ```python
-from handelsregister import search
+from handelsregister import search, KeywordMatch
 
-# Find exact company name
+# Find exact company name (recommended: Enum)
+companies = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-based API still works
 companies = search("GASAG AG", keyword_option="exact")
 
 if companies:
@@ -63,9 +77,9 @@ else:
 ### Accessing Company Data
 
 ```python
-from handelsregister import search
+from handelsregister import search, KeywordMatch
 
-companies = search("Siemens AG", keyword_option="exact")
+companies = search("Siemens AG", keyword_option=KeywordMatch.EXACT)
 
 if companies:
     company = companies[0]
@@ -80,9 +94,9 @@ if companies:
 ### Converting to List of Names
 
 ```python
-from handelsregister import search
+from handelsregister import search, State
 
-companies = search("Bank", states=["BE"])
+companies = search("Bank", states=[State.BE])
 
 # Extract just the names
 names = [c.name for c in companies]
@@ -110,10 +124,10 @@ large_banks = [
 ### Basic Details
 
 ```python
-from handelsregister import search, get_details
+from handelsregister import search, get_details, KeywordMatch
 
-# Search for company
-companies = search("GASAG AG", keyword_option="exact")
+# Search for company (recommended: Enum)
+companies = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
 
 if companies:
     # Get full details
@@ -126,9 +140,9 @@ if companies:
 ### Accessing Address
 
 ```python
-from handelsregister import search, get_details
+from handelsregister import search, get_details, KeywordMatch
 
-companies = search("GASAG AG", keyword_option="exact")
+companies = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
 details = get_details(companies[0])
 
 if details.address:
@@ -139,9 +153,9 @@ if details.address:
 ### Listing Representatives
 
 ```python
-from handelsregister import search, get_details
+from handelsregister import search, get_details, KeywordMatch
 
-companies = search("Deutsche Bahn AG", keyword_option="exact")
+companies = search("Deutsche Bahn AG", keyword_option=KeywordMatch.EXACT)
 details = get_details(companies[0])
 
 print("Management:")

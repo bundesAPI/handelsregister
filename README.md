@@ -33,17 +33,25 @@ pip install git+https://github.com/bundesAPI/handelsregister.git
 ### Einfache API
 
 ```python
-from handelsregister import search
+from handelsregister import search, State, RegisterType
 
 # Einfache Suche
 unternehmen = search("Deutsche Bahn")
 
-# Mit Optionen
+# Mit Optionen (empfohlen: Enums für Autovervollständigung)
 banken = search(
     keywords="Bank",
-    states=["BE", "HH"],           # Nur Berlin und Hamburg
-    register_type="HRB",            # Nur HRB-Einträge
+    states=[State.BE, State.HH],    # Nur Berlin und Hamburg
+    register_type=RegisterType.HRB, # Nur HRB-Einträge
     include_deleted=False,          # Keine gelöschten
+)
+
+# String-basierte API funktioniert weiterhin
+banken = search(
+    keywords="Bank",
+    states=["BE", "HH"],
+    register_type="HRB",
+    include_deleted=False,
 )
 
 # Ergebnisse verarbeiten
@@ -58,15 +66,28 @@ for firma in banken:
 Für mehr Kontrolle kann die `HandelsRegister`-Klasse direkt verwendet werden:
 
 ```python
-from handelsregister import HandelsRegister, SearchOptions, SearchCache
+from handelsregister import (
+    HandelsRegister, SearchOptions, SearchCache,
+    State, KeywordMatch, RegisterType
+)
 
-# Mit SearchOptions
+# Mit SearchOptions (empfohlen: Enums)
+options = SearchOptions(
+    keywords="Energie",
+    keyword_option=KeywordMatch.ALL,
+    states=[State.BY, State.BW],
+    register_type=RegisterType.HRB,
+    similar_sounding=True,      # Phonetische Suche
+    results_per_page=100,
+)
+
+# String-basierte API funktioniert weiterhin
 options = SearchOptions(
     keywords="Energie",
     keyword_option="all",
     states=["BY", "BW"],
     register_type="HRB",
-    similar_sounding=True,      # Phonetische Suche
+    similar_sounding=True,
     results_per_page=100,
 )
 
@@ -84,9 +105,12 @@ hr = HandelsRegister(cache=cache)
 Zu Suchergebnissen können erweiterte Unternehmensinformationen abgerufen werden:
 
 ```python
-from handelsregister import search, get_details
+from handelsregister import search, get_details, KeywordMatch
 
-# Erst suchen
+# Erst suchen (empfohlen: Enum)
+unternehmen = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-basierte API funktioniert weiterhin
 unternehmen = search("GASAG AG", keyword_option="exact")
 
 # Dann Details abrufen

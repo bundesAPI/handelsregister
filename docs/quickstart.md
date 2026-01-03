@@ -62,9 +62,12 @@ handelsregister -s "Deutsche Bahn" --json
 ### By State
 
 ```python
-from handelsregister import search
+from handelsregister import search, State
 
-# Only Berlin companies
+# Only Berlin companies (recommended: Enum for autocomplete)
+results = search("Bank", states=[State.BE])
+
+# String-based API still works
 results = search("Bank", states=["BE"])
 ```
 
@@ -76,7 +79,12 @@ handelsregister -s "Bank" --states BE
 ### By Register Type
 
 ```python
-# Only corporations (HRB)
+from handelsregister import search, RegisterType
+
+# Only corporations (HRB) - recommended: Enum
+results = search("GmbH", register_type=RegisterType.HRB)
+
+# String-based API still works
 results = search("GmbH", register_type="HRB")
 ```
 
@@ -88,7 +96,18 @@ handelsregister -s "GmbH" --register-type HRB
 ### Combined Filters
 
 ```python
+from handelsregister import search, State, RegisterType
+
 # Banks in Berlin or Hamburg, only HRB, exclude deleted entries
+# Recommended: Enums for better IDE support
+results = search(
+    keywords="Bank",
+    states=[State.BE, State.HH],
+    register_type=RegisterType.HRB,
+    include_deleted=False
+)
+
+# String-based API still works
 results = search(
     keywords="Bank",
     states=["BE", "HH"],
@@ -102,9 +121,12 @@ results = search(
 ## Fetching Details
 
 ```python
-from handelsregister import search, get_details
+from handelsregister import search, get_details, KeywordMatch
 
-# Search
+# Search (recommended: Enum for autocomplete)
+companies = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-based API still works
 companies = search("GASAG AG", keyword_option="exact")
 
 if companies:

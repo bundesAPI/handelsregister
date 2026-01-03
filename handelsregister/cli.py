@@ -4,10 +4,17 @@ import argparse
 import json
 import logging
 import sys
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from .client import HandelsRegister
-from .constants import REGISTER_TYPES, RESULTS_PER_PAGE_OPTIONS, STATE_CODES
+from .constants import (
+    REGISTER_TYPES,
+    RESULTS_PER_PAGE_OPTIONS,
+    STATE_CODES,
+    KeywordMatch,
+    RegisterType,
+    State,
+)
 from .exceptions import (
     CacheError,
     FormError,
@@ -155,9 +162,9 @@ State codes: {state_codes_help}
 
 def search(
     keywords: str,
-    keyword_option: Literal["all", "min", "exact"] = "all",
-    states: Optional[list[str]] = None,
-    register_type: Optional[Literal["HRA", "HRB", "GnR", "PR", "VR"]] = None,
+    keyword_option: Union[KeywordMatch, Literal["all", "min", "exact"]] = "all",
+    states: Optional[list[Union[State, str]]] = None,
+    register_type: Optional[Union[RegisterType, Literal["HRA", "HRB", "GnR", "PR", "VR"]]] = None,
     register_number: Optional[str] = None,
     include_deleted: bool = False,
     similar_sounding: bool = False,
@@ -173,8 +180,11 @@ def search(
         keywords: Suchbegriffe (erforderlich).
         keyword_option: Suchmodus - "all" (alle Begriffe), "min" (mindestens einer),
                        "exact" (exakter Firmenname). Standard: "all".
+                       Can be KeywordMatch enum or string.
         states: Liste von Bundesland-Codes zum Filtern (z.B. ["BE", "BY", "HH"]).
+               Can be State enum values or strings.
         register_type: Registerart-Filter (HRA, HRB, GnR, PR, VR).
+                      Can be RegisterType enum or string.
         register_number: Spezifische Registernummer suchen.
         include_deleted: Auch gelöschte Einträge anzeigen.
         similar_sounding: Phonetische Suche (Kölner Phonetik) verwenden.
@@ -199,13 +209,16 @@ def search(
         ParseError: Bei Fehlern beim Parsen der Ergebnisse.
 
     Beispiel:
-        >>> from handelsregister import search
+        >>> from handelsregister import search, State, KeywordMatch, RegisterType
         >>>
         >>> # Einfache Suche
         >>> companies = search("Deutsche Bahn")
         >>>
-        >>> # Mit Filtern
+        >>> # Mit Filtern (string-basiert)
         >>> banks = search("Bank", states=["BE", "HH"], register_type="HRB")
+        >>>
+        >>> # Mit Filtern (enum-basiert, mit Autovervollständigung)
+        >>> banks = search("Bank", states=[State.BE, State.HH], register_type=RegisterType.HRB)
         >>>
         >>> for company in banks:
         ...     print(f"{company['name']} - {company['register_num']}")
@@ -217,14 +230,25 @@ def search(
         )
 
     # Build args namespace for HandelsRegister
+    # Convert Enums to strings for backward compatibility
+    keyword_option_str = (
+        keyword_option.value if isinstance(keyword_option, KeywordMatch) else keyword_option
+    )
+    states_str = (
+        ",".join(s.value if isinstance(s, State) else s for s in states) if states else None
+    )
+    register_type_str = (
+        register_type.value if isinstance(register_type, RegisterType) else register_type
+    )
+
     args = argparse.Namespace(
         debug=debug,
         force=force_refresh,
         json=False,
         schlagwoerter=keywords,
-        schlagwortOptionen=keyword_option,
-        states=",".join(states) if states else None,
-        register_type=register_type,
+        schlagwortOptionen=keyword_option_str,
+        states=states_str,
+        register_type=register_type_str,
         register_number=register_number,
         include_deleted=include_deleted,
         similar_sounding=similar_sounding,
@@ -238,8 +262,8 @@ def search(
 
 def search_batch(
     keywords_list: list[str],
-    states: Optional[list[str]] = None,
-    register_type: Optional[str] = None,
+    states: Optional[list[Union[State, str]]] = None,
+    register_type: Optional[Union[RegisterType, str]] = None,
     show_progress: Optional[bool] = None,
     continue_on_error: bool = True,
     raise_partial: bool = False,

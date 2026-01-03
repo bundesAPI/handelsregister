@@ -48,8 +48,8 @@ The function returns a list of `Company` objects with the following attributes:
 companies = search(
     keywords="Bank",              # Search term (required)
     keyword_option="all",         # How to match: "all", "min", or "exact"
-    states=["BE", "HH"],          # Filter by states
-    register_type="HRB",          # Filter by register type
+    states=["BE", "HH"],          # Filter by states (can use State enum)
+    register_type="HRB",          # Filter by register type (can use RegisterType enum)
     register_number="12345",      # Specific register number
     include_deleted=False,        # Only currently registered
     similar_sounding=False,       # Include similar-sounding names
@@ -76,10 +76,16 @@ search("Deutsche Bank AG")
 Filter by German federal states using ISO codes:
 
 ```python
-# Single state
-search("Bank", states=["BE"])
+from handelsregister import search, State
 
-# Multiple states
+# Single state (recommended: Enum)
+search("Bank", states=[State.BE])
+
+# Multiple states (recommended: Enums)
+search("Bank", states=[State.BE, State.HH, State.BY])
+
+# String-based API still works
+search("Bank", states=["BE"])
 search("Bank", states=["BE", "HH", "BY"])
 ```
 
@@ -89,11 +95,16 @@ See [State Codes](../reference/states.md) for all codes.
 Filter by register type:
 
 ```python
-# Only HRB (corporations)
-search("GmbH", register_type="HRB")
+from handelsregister import search, RegisterType
+
+# Only HRB (corporations) - recommended: Enum
+search("GmbH", register_type=RegisterType.HRB)
 
 # Only HRA (sole proprietors, partnerships)
-search("KG", register_type="HRA")
+search("KG", register_type=RegisterType.HRA)
+
+# String-based API still works
+search("GmbH", register_type="HRB")
 ```
 
 See [Register Types](../reference/registers.md) for all types.
@@ -102,13 +113,19 @@ See [Register Types](../reference/registers.md) for all types.
 How to match keywords:
 
 ```python
-# All keywords must match (default)
-search("Deutsche Bank", keyword_option="all")
+from handelsregister import search, KeywordMatch
+
+# All keywords must match (default) - recommended: Enum
+search("Deutsche Bank", keyword_option=KeywordMatch.ALL)
 
 # At least one keyword must match
-search("Deutsche Bank", keyword_option="min")
+search("Deutsche Bank", keyword_option=KeywordMatch.MIN)
 
 # Exact name match
+search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-based API still works
+search("Deutsche Bank", keyword_option="all")
 search("GASAG AG", keyword_option="exact")
 ```
 
@@ -164,7 +181,9 @@ else:
 import pandas as pd
 from handelsregister import search
 
-companies = search("Bank", states=["BE"])
+from handelsregister import search, State
+
+companies = search("Bank", states=[State.BE])
 
 # Convert Company objects to dicts for pandas
 df = pd.DataFrame([c.to_dict() for c in companies])
@@ -182,16 +201,16 @@ print(df.groupby('court').size())
 For more control, use the `HandelsRegister` class directly:
 
 ```python
-from handelsregister import HandelsRegister
+from handelsregister import HandelsRegister, State, RegisterType
 
 # Create instance
 hr = HandelsRegister()
 
-# Search with full control
+# Search with full control (recommended: Enums)
 results = hr.search(
     keywords="Bank",
-    register_type="HRB",
-    states=["BE"]
+    register_type=RegisterType.HRB,
+    states=[State.BE]
 )
 
 # Get details
@@ -297,7 +316,9 @@ companies = search("Bank")  # Second call: from cache
 
 ```python
 # Good: Filter on the server
-companies = search("Bank", states=["BE"], register_type="HRB")
+from handelsregister import search, State, RegisterType
+
+companies = search("Bank", states=[State.BE], register_type=RegisterType.HRB)
 
 # Less efficient: Filter client-side
 companies = search("Bank")
