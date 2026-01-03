@@ -5,7 +5,8 @@ description = "Python-Package für das deutsche Handelsregister"
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "BundesAPI", email = "kontakt@bund.dev" }
+    { name = "BundesAPI", email = "kontakt@bund.dev" },
+    { name = "maximiliancw", email = "wunderkind-serie0f@icloud.com" }
 ]
 keywords = ["handelsregister", "germany", "commercial-register", "cli", "api"]
 requires-python = ">=3.9"
