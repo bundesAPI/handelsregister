@@ -507,30 +507,18 @@ class HandelsRegister:
             response = self.browser.submit()
             return response.read().decode("utf-8")
             
-        except mechanize.FormNotFoundError:
-            logger.warning("Results form not found, using alternative fetch method")
-            return self._fetch_detail_alternative(company, detail_type)
+        except mechanize.FormNotFoundError as e:
+            raise FormError(
+                f"Results form not found. Unable to fetch {detail_type} details for "
+                f"{company.name} ({company.register_num or 'N/A'}). "
+                f"The website structure may have changed or the search results page is no longer available.",
+                original_error=e
+            ) from e
         except urllib.error.URLError as e:
             raise NetworkError(
                 f"Failed to fetch detail page: {e.reason}",
                 original_error=e
             ) from e
-    
-    def _fetch_detail_alternative(self, company: Company, detail_type: str) -> str:
-        """Alternative method to fetch details when form is not available.
-        
-        This method constructs a direct request based on company information.
-        Full implementation requires JSF viewstate handling.
-        """
-        register_num = company.register_num or ''
-        _court = company.court
-        _state = company.state
-        
-        logger.warning(
-            "Alternative fetch not fully implemented for %s %s", 
-            register_num, detail_type
-        )
-        return ""
     
     def _parse_details(
         self, 

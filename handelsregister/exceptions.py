@@ -24,7 +24,9 @@ class ParseError(HandelsregisterError):
 
 class FormError(HandelsregisterError):
     """Raised when form interaction fails."""
-    pass
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_error = original_error
 
 
 class CacheError(HandelsregisterError):
