@@ -1,26 +1,26 @@
 site_name: Handelsregister Documentation
 site_description: Python package for the German commercial register portal
-site_author: BundesAPI
+site_author: BundesAPI Contributors
 site_url: https://bundesapi.github.io/handelsregister
 
 repo_name: bundesAPI/handelsregister
 repo_url: https://github.com/bundesAPI/handelsregister
 
-copyright: Copyright &copy; 2024 BundesAPI
+copyright: Copyright &copy; 2025 BundesAPI Contributors
 
 theme:
   name: material
   language: en
   palette:
     - scheme: default
-      primary: deep purple
-      accent: amber
+      primary: indigo
+      accent: blue
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: deep purple
-      accent: amber
+      primary: indigo
+      accent: blue
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -65,13 +65,13 @@ plugins:
             Getting Started: Erste Schritte
             Installation: Installation
             Quickstart: Schnellstart
-            User Guide: Benutzerhandbuch
+            User Guide: User Guide
             Overview: Übersicht
             Using as Library: Als Library verwenden
             Command Line (CLI): Kommandozeile (CLI)
-            Fetching Details: Detailabruf
+            Fetching Details: Unternehmensdetails abrufen
             Caching: Caching
-            API Reference: API-Referenz
+            API Reference: Quellcodebeschreibung
             Public Functions: Öffentliche Funktionen
             Classes: Klassen
             Data Models: Datenmodelle
@@ -82,10 +82,10 @@ plugins:
             Legal Forms: Rechtsformen
             API Parameters: API-Parameter
             Examples: Beispiele
-            Simple Examples: Einfache Beispiele
+            Simple: Einfache
             Advanced: Fortgeschritten
             Integrations: Integrationen
-            Legal Notice: Rechtliches
+            Legal Notice: Rechtliche Hinweise
             Changelog: Changelog
   - mkdocstrings:
       default_handler: python
