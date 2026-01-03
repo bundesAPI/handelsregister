@@ -659,22 +659,4 @@ class HandelsRegister:
         
         return results
     
-    def _get_cache_key(self, query: str, options: str) -> str:
-        """Generates cache key. Deprecated: use cache.get/set instead."""
-        return self.cache._get_cache_key(query, options)
-    
-    def _get_cache_path(self, query: str, options: str) -> pathlib.Path:
-        """Gets cache path. Deprecated: use cache.get/set instead."""
-        return self.cache._get_cache_path(query, options)
-    
-    def _load_from_cache(self, query: str, options: str) -> Optional[CacheEntry]:
-        """Loads from cache. Deprecated: use cache.get instead."""
-        html = self.cache.get(query, options)
-        if html is None:
-            return None
-        return CacheEntry(query=query, options=options, timestamp=time.time(), html=html)
-    
-    def _save_to_cache(self, query: str, options: str, html: str) -> None:
-        """Saves to cache. Deprecated: use cache.set instead."""
-        self.cache.set(query, options, html)
 
