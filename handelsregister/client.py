@@ -451,7 +451,7 @@ class HandelsRegister:
                     logger.warning(
                         "Failed to fetch %s details for %s, trying fallback: %s",
                         attempt_type,
-                        company.get('name', 'unknown'),
+                        company.name or 'unknown',
                         e
                     )
                 else:
@@ -463,7 +463,7 @@ class HandelsRegister:
                     logger.warning(
                         "Unexpected error fetching %s details for %s, trying fallback: %s",
                         attempt_type,
-                        company.get('name', 'unknown'),
+                        company.name or 'unknown',
                         e
                     )
                 else:
