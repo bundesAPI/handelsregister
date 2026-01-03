@@ -1,6 +1,6 @@
 [project]
 name = "handelsregister"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python-Package für das deutsche Handelsregister"
 readme = "README.md"
 license = "MIT"

@@ -61,7 +61,7 @@ from .settings import (
 from .cli import get_details, pr_company_details, pr_company_info, search, search_batch
 
 # Package metadata
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     # Main classes
     "HandelsRegister",
