@@ -2,21 +2,88 @@
 .idea/
 *.xml
 *.iml
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
 
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
 # Distribution / Packaging
 dist/
 build/
 *.egg-info/
+.eggs/
+*.egg
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
 
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytest_cache/
+test-results/
+*.cover
+*.log
+.cache
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# MkDocs
 site/
+.mkdocs_cache/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Pre-commit
+.pre-commit-config.yaml.bak
