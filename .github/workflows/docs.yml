@@ -66,7 +66,12 @@ jobs:
               - 'mkdocs.yml'
       
       # Only deploy if docs actually changed and both workflows passed
-      - name: Setup Python
+      - name: Install uv
+        if: steps.filter.outputs.docs == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Set up Python
         if: steps.filter.outputs.docs == 'true'
         uses: actions/setup-python@v5
         with:
@@ -74,14 +79,15 @@ jobs:
       - name: Install dependencies
         if: steps.filter.outputs.docs == 'true'
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[docs]"
+          uv sync --extra docs --extra dev
+          # Ensure package is installed in editable mode for mkdocstrings
+          uv pip install -e ".[docs]"
       - name: Setup Pages
         if: steps.filter.outputs.docs == 'true'
         uses: actions/configure-pages@v5
       - name: Build with MkDocs
         if: steps.filter.outputs.docs == 'true'
-        run: mkdocs build
+        run: uv run mkdocs build
       - name: Upload artifact
         if: steps.filter.outputs.docs == 'true'
         uses: actions/upload-pages-artifact@v3
