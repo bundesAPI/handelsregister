@@ -20,8 +20,8 @@ warnings.warn(
     "Please use 'from handelsregister import ...' instead. "
     "The old single-file structure will be removed in a future version.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 # Re-export everything from the new package structure
-from handelsregister import *  # noqa: F403, F401
+from handelsregister import *  # noqa: F403, E402
