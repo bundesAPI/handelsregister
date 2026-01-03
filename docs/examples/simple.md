@@ -14,7 +14,7 @@ companies = search("Deutsche Bahn")
 
 print(f"Found {len(companies)} companies")
 for company in companies:
-    print(f"  - {company['name']}")
+    print(f"  - {company.name}")
 ```
 
 ### Search with State Filter
@@ -51,7 +51,7 @@ from handelsregister import search
 companies = search("GASAG AG", keyword_option="exact")
 
 if companies:
-    print(f"Found: {companies[0]['name']}")
+    print(f"Found: {companies[0].name}")
 else:
     print("Company not found")
 ```
@@ -70,11 +70,11 @@ companies = search("Siemens AG", keyword_option="exact")
 if companies:
     company = companies[0]
     
-    print(f"Name: {company['name']}")
-    print(f"Court: {company['court']}")
-    print(f"Number: {company['register_num']}")
-    print(f"Status: {company['status']}")
-    print(f"State: {company['state']}")
+    print(f"Name: {company.name}")
+    print(f"Court: {company.court}")
+    print(f"Number: {company.register_num}")
+    print(f"Status: {company.status}")
+    print(f"State: {company.state}")
 ```
 
 ### Converting to List of Names
@@ -85,7 +85,7 @@ from handelsregister import search
 companies = search("Bank", states=["BE"])
 
 # Extract just the names
-names = [c['name'] for c in companies]
+names = [c.name for c in companies]
 print(names)
 ```
 
@@ -99,7 +99,7 @@ companies = search("Bank")
 # Filter for specific criteria
 large_banks = [
     c for c in companies
-    if "AG" in c['name'] and c['status'] == 'currently registered'
+    if "AG" in c.name and c.status == 'currently registered'
 ]
 ```
 

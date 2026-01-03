@@ -16,27 +16,27 @@ companies = search("Deutsche Bahn")
 
 # Process results
 for company in companies:
-    print(f"Name: {company['name']}")
-    print(f"Court: {company['court']}")
-    print(f"Number: {company['register_num']}")
-    print(f"Status: {company['status']}")
+    print(f"Name: {company.name}")
+    print(f"Court: {company.court}")
+    print(f"Number: {company.register_num}")
+    print(f"Status: {company.status}")
     print("---")
 ```
 
 ### Return Value
 
-The function returns a list of dictionaries with the following keys:
+The function returns a list of `Company` objects with the following attributes:
 
-| Key | Type | Description |
-|-----|------|-------------|
+| Attribute | Type | Description |
+|-----------|------|-------------|
 | `name` | `str` | Company name |
 | `court` | `str` | Register court |
-| `register_num` | `str` | Register number (e.g., "HRB 12345 B") |
+| `register_num` | `str \| None` | Register number (e.g., "HRB 12345 B") |
 | `state` | `str` | State name (e.g., "Berlin") |
 | `status` | `str` | Registration status |
-| `statusCurrent` | `str` | Normalized status (e.g., "CURRENTLY_REGISTERED") |
+| `status_normalized` | `str` | Normalized status (e.g., "CURRENTLY_REGISTERED") |
 | `documents` | `str` | Available document types |
-| `history` | `list` | List of (name, location) tuples with historical entries |
+| `history` | `List[HistoryEntry]` | List of historical entries (name, location) |
 
 ---
 
@@ -138,12 +138,12 @@ for company in companies:
 
 # With index
 for i, company in enumerate(companies):
-    print(f"{i+1}. {company['name']}")
+    print(f"{i+1}. {company.name}")
 
 # Filter in Python
 berlin_companies = [
     c for c in companies 
-    if c['state'] == 'BE'
+    if c.state == 'Berlin'
 ]
 ```
 
@@ -166,8 +166,8 @@ from handelsregister import search
 
 companies = search("Bank", states=["BE"])
 
-# Convert to DataFrame
-df = pd.DataFrame(companies)
+# Convert Company objects to dicts for pandas
+df = pd.DataFrame([c.to_dict() for c in companies])
 
 # Analyze
 print(df.groupby('court').size())
@@ -301,7 +301,7 @@ companies = search("Bank", states=["BE"], register_type="HRB")
 
 # Less efficient: Filter client-side
 companies = search("Bank")
-berlin_hrb = [c for c in companies if c['state'] == 'BE']
+berlin_hrb = [c for c in companies if c.state == 'Berlin']
 ```
 
 ### 4. Handle Empty Results

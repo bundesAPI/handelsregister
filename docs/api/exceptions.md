@@ -186,7 +186,7 @@ def robust_get_details(company):
         return get_details(company)
     
     except HandelsregisterError as e:
-        logger.error(f"Could not get details for {company['name']}: {e}")
+        logger.error(f"Could not get details for {company.name}: {e}")
         return None
 ```
 

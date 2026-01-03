@@ -138,7 +138,7 @@ class Command(BaseCommand):
         
         self.stdout.write(f"Found {len(companies)} companies\n")
         for company in companies[:limit]:
-            self.stdout.write(f"  - {company['name']}")
+            self.stdout.write(f"  - {company.name}")
 ```
 
 ### Django Model Integration
@@ -283,7 +283,8 @@ import matplotlib.pyplot as plt
 
 # Cell 2: Search and explore
 companies = search("Bank", states=["BE", "HH", "BY"])
-df = pd.DataFrame(companies)
+# Convert Company objects to dicts for pandas
+df = pd.DataFrame([c.to_dict() for c in companies])
 df.head()
 
 # Cell 3: Visualize by state
@@ -294,8 +295,9 @@ plt.ylabel('Count')
 plt.show()
 
 # Cell 4: Get details for top companies
-for _, row in df.head(3).iterrows():
-    details = get_details(row.to_dict())
+# Use Company objects directly (not DataFrame rows)
+for company in companies[:3]:
+    details = get_details(company)
     print(f"{details.name}: {details.capital} {details.currency}")
 ```
 

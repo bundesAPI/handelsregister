@@ -242,7 +242,7 @@ companies = search("Bank", states=["BE"])
 
 all_details = []
 for i, company in enumerate(companies[:10]):  # Limit for safety
-    print(f"Fetching {i+1}/{len(companies)}: {company['name']}")
+    print(f"Fetching {i+1}/{len(companies)}: {company.name}")
     
     details = get_details(company)
     all_details.append(details)
@@ -265,7 +265,7 @@ try:
 except SearchError as e:
     print(f"Could not fetch details: {e}")
     # Fallback to basic info from search result
-    print(f"Company: {company['name']}")
+    print(f"Company: {company.name}")
 ```
 
 ---

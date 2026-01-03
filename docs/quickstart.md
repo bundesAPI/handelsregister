@@ -24,9 +24,9 @@ results = search("Deutsche Bahn")
 
 # Display results
 for company in results:
-    print(f"{company['name']}")
-    print(f"  Register: {company['court']} {company['register_num']}")
-    print(f"  Status: {company['status']}")
+    print(f"{company.name}")
+    print(f"  Register: {company.court} {company.register_num}")
+    print(f"  Status: {company.status}")
     print()
 ```
 

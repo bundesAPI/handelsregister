@@ -49,7 +49,7 @@ from handelsregister import search
 companies = search("Deutsche Bahn")
 
 for company in companies:
-    print(f"{company['name']} - {company['register_num']}")
+    print(f"{company.name} - {company.register_num}")
 ```
 
 ### Features

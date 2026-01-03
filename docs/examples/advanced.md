@@ -60,7 +60,8 @@ from handelsregister import search
 
 # Search and convert to DataFrame
 companies = search("Bank", states=["BE", "HH"])
-df = pd.DataFrame(companies)
+# Convert Company objects to dicts for pandas
+df = pd.DataFrame([c.to_dict() for c in companies])
 
 # Analysis
 print("Companies by court:")

@@ -16,25 +16,27 @@ firmen = search("Deutsche Bahn")
 
 # Ergebnisse verarbeiten
 for firma in firmen:
-    print(f"Name: {firma['name']}")
-    print(f"Gericht: {firma['court']}")
-    print(f"Nummer: {firma['register_num']}")
-    print(f"Status: {firma['status']}")
+    print(f"Name: {firma.name}")
+    print(f"Gericht: {firma.court}")
+    print(f"Nummer: {firma.register_num}")
+    print(f"Status: {firma.status}")
     print("---")
 ```
 
 ### Rückgabewert
 
-Die Funktion gibt eine Liste von Dictionaries mit folgenden Schlüsseln zurück:
+Die Funktion gibt eine Liste von `Company`-Objekten mit folgenden Attributen zurück:
 
-| Schlüssel | Typ | Beschreibung |
-|-----------|-----|--------------|
+| Attribut | Typ | Beschreibung |
+|----------|-----|--------------|
 | `name` | `str` | Firmenname |
 | `court` | `str` | Registergericht |
-| `register_num` | `str` | Registernummer (z.B. "HRB 12345") |
+| `register_num` | `str \| None` | Registernummer (z.B. "HRB 12345 B") |
 | `status` | `str` | Registrierungsstatus |
-| `state` | `str` | Bundesland-Code (z.B. "BE") |
-| `history` | `list` | Liste historischer Einträge |
+| `state` | `str` | Bundesland (z.B. "Berlin") |
+| `status_normalized` | `str` | Normalisierter Status (z.B. "CURRENTLY_REGISTERED") |
+| `documents` | `str` | Verfügbare Dokumenttypen |
+| `history` | `List[HistoryEntry]` | Liste historischer Einträge |
 
 ---
 
@@ -132,7 +134,7 @@ for firma in firmen:
 
 # Mit Index
 for i, firma in enumerate(firmen):
-    print(f"{i+1}. {firma['name']}")
+    print(f"{i+1}. {firma.name}")
 
 # In Python filtern
 berliner_firmen = [

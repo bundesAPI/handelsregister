@@ -186,7 +186,7 @@ def robuste_details(firma):
         return get_details(firma)
     
     except HandelsregisterError as e:
-        logger.error(f"Details für {firma['name']} nicht abrufbar: {e}")
+        logger.error(f"Details für {firma.name} nicht abrufbar: {e}")
         return None
 ```
 

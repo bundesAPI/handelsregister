@@ -242,7 +242,7 @@ firmen = search("Bank", states=["BE"])
 
 alle_details = []
 for i, firma in enumerate(firmen[:10]):  # Limit zur Sicherheit
-    print(f"Rufe ab {i+1}/{len(firmen)}: {firma['name']}")
+    print(f"Rufe ab {i+1}/{len(firmen)}: {firma.name}")
     
     details = get_details(firma)
     alle_details.append(details)
@@ -265,7 +265,7 @@ try:
 except SearchError as e:
     print(f"Details konnten nicht abgerufen werden: {e}")
     # Fallback auf Grundinfo aus Suchergebnis
-    print(f"Firma: {firma['name']}")
+    print(f"Firma: {firma.name}")
 ```
 
 ---

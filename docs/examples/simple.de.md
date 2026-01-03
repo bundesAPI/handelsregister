@@ -14,7 +14,7 @@ firmen = search("Deutsche Bahn")
 
 print(f"{len(firmen)} Unternehmen gefunden")
 for firma in firmen:
-    print(f"  - {firma['name']}")
+    print(f"  - {firma.name}")
 ```
 
 ### Suche mit Bundesland-Filter
@@ -51,7 +51,7 @@ from handelsregister import search
 firmen = search("GASAG AG", keyword_option="exact")
 
 if firmen:
-    print(f"Gefunden: {firmen[0]['name']}")
+    print(f"Gefunden: {firmen[0].name}")
 else:
     print("Unternehmen nicht gefunden")
 ```
@@ -70,11 +70,11 @@ firmen = search("Siemens AG", keyword_option="exact")
 if firmen:
     firma = firmen[0]
     
-    print(f"Name: {firma['name']}")
-    print(f"Gericht: {firma['court']}")
-    print(f"Nummer: {firma['register_num']}")
-    print(f"Status: {firma['status']}")
-    print(f"Bundesland: {firma['state']}")
+    print(f"Name: {firma.name}")
+    print(f"Gericht: {firma.court}")
+    print(f"Nummer: {firma.register_num}")
+    print(f"Status: {firma.status}")
+    print(f"Bundesland: {firma.state}")
 ```
 
 ### In Liste von Namen konvertieren

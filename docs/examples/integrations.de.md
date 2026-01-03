@@ -139,7 +139,7 @@ class Command(BaseCommand):
         
         self.stdout.write(f"{len(firmen)} Unternehmen gefunden\n")
         for firma in firmen[:limit]:
-            self.stdout.write(f"  - {firma['name']}")
+            self.stdout.write(f"  - {firma.name}")
 ```
 
 ### Django Model Integration
@@ -284,7 +284,8 @@ import matplotlib.pyplot as plt
 
 # Zelle 2: Suchen und erkunden
 firmen = search("Bank", states=["BE", "HH", "BY"])
-df = pd.DataFrame(firmen)
+# Company-Objekte in Dicts für pandas konvertieren
+df = pd.DataFrame([f.to_dict() for f in firmen])
 df.head()
 
 # Zelle 3: Nach Bundesland visualisieren
@@ -295,8 +296,9 @@ plt.ylabel('Anzahl')
 plt.show()
 
 # Zelle 4: Details für Top-Unternehmen abrufen
-for _, zeile in df.head(3).iterrows():
-    details = get_details(zeile.to_dict())
+# Company-Objekte direkt verwenden (nicht DataFrame-Zeilen)
+for firma in firmen[:3]:
+    details = get_details(firma)
     print(f"{details.name}: {details.capital} {details.currency}")
 ```
 
