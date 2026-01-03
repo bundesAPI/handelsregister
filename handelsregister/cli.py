@@ -18,17 +18,21 @@ from .exceptions import (
 from .models import Company, CompanyDetails, SearchOptions
 
 
-def pr_company_info(c: dict) -> None:
+def pr_company_info(c: Company) -> None:
     """Prints company information to stdout.
     
     Args:
-        c: Dictionary containing company information.
+        c: Company object containing company information.
     """
-    for tag in ('name', 'court', 'register_num', 'district', 'state', 'statusCurrent'):
-        print(f"{tag}: {c.get(tag, '-')}")
+    print(f"name: {c.name}")
+    print(f"court: {c.court}")
+    print(f"register_num: {c.register_num or '-'}")
+    print(f"state: {c.state}")
+    print(f"statusCurrent: {c.status_normalized or '-'}")
+    print(f"documents: {c.documents}")
     print('history:')
-    for name, loc in c.get('history', []):
-        print(name, loc)
+    for entry in c.history:
+        print(f"{entry.name} {entry.location}")
 
 
 def parse_args() -> argparse.Namespace:
