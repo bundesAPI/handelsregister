@@ -44,6 +44,7 @@ Issues = "https://github.com/bundesAPI/handelsregister/issues"
 
 [project.scripts]
 handelsregister = "handelsregister.cli:main"
+hrg = "handelsregister.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -158,6 +158,8 @@ if unternehmen:
 
 ## Verwendung als CLI
 
+Die CLI kann über `handelsregister` oder die kürzere Variante `hrg` aufgerufen werden.
+
 ### Kommandozeilen-Schnittstelle
 
 ```
@@ -215,12 +217,18 @@ Detailoptionen:
 ```bash
 # Einfache Suche
 uv run handelsregister -s "Deutsche Bahn" -so all
+# Oder kürzer:
+uv run hrg -s "Deutsche Bahn" -so all
 
 # Suche mit JSON-Ausgabe
 uv run handelsregister -s "GASAG AG" -so exact --json
+# Oder:
+uv run hrg -s "GASAG AG" -so exact --json
 
 # Nach Bundesland und Registerart filtern
 uv run handelsregister -s "Bank" --states BE,HH --register-type HRB
+# Oder:
+uv run hrg -s "Bank" --states BE,HH --register-type HRB
 
 # Gelöschte Einträge mit phonetischer Suche
 uv run handelsregister -s "Mueller" --include-deleted --similar-sounding

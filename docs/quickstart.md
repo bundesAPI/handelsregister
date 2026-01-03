@@ -48,6 +48,8 @@ DB Fernverkehr Aktiengesellschaft
 ```bash
 # Search for "Deutsche Bahn"
 handelsregister -s "Deutsche Bahn"
+# Or use the shorter alias:
+hrg -s "Deutsche Bahn"
 
 # As JSON output
 handelsregister -s "Deutsche Bahn" --json

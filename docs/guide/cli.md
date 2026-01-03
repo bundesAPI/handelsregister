@@ -7,9 +7,13 @@ The Handelsregister package includes a powerful command-line interface for quick
 ```bash
 # Simple search
 handelsregister -s "Deutsche Bahn"
+# Or use the shorter alias:
+hrg -s "Deutsche Bahn"
 
 # With uv
 uv run handelsregister -s "Deutsche Bahn"
+# Or:
+uv run hrg -s "Deutsche Bahn"
 ```
 
 ---

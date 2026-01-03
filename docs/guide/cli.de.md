@@ -7,9 +7,13 @@ Das Handelsregister-Package enthält eine leistungsfähige Kommandozeilen-Schnit
 ```bash
 # Einfache Suche
 handelsregister -s "Deutsche Bahn"
+# Oder die kürzere Variante verwenden:
+hrg -s "Deutsche Bahn"
 
 # Mit uv
 uv run handelsregister -s "Deutsche Bahn"
+# Oder:
+uv run hrg -s "Deutsche Bahn"
 ```
 
 ---
