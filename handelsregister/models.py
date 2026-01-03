@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
@@ -231,15 +231,33 @@ class CompanyDetails(BaseModel):
         return data
     
     @classmethod
-    def from_company(cls, company: 'Company') -> 'CompanyDetails':
-        """Creates CompanyDetails from a Company search result."""
-        return cls(
-            name=company.name,
-            register_num=company.register_num or '',
-            court=company.court,
-            state=company.state,
-            status=company.status,
-        )
+    def from_company(cls, company: Union['Company', dict[str, Any]]) -> 'CompanyDetails':
+        """Creates CompanyDetails from a Company search result or dict.
+        
+        Args:
+            company: Company object or dict with company information.
+            
+        Returns:
+            CompanyDetails with basic information from the company.
+        """
+        if isinstance(company, dict):
+            # Backward compatibility: accept dict
+            return cls(
+                name=company.get('name', ''),
+                register_num=company.get('register_num', '') or '',
+                court=company.get('court', ''),
+                state=company.get('state', ''),
+                status=company.get('status', ''),
+            )
+        else:
+            # Company object
+            return cls(
+                name=company.name,
+                register_num=company.register_num or '',
+                court=company.court,
+                state=company.state,
+                status=company.status,
+            )
 
 
 class Company(BaseModel):

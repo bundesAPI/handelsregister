@@ -1,7 +1,7 @@
 """HTML parsing layer for the Handelsregister package."""
 
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -57,12 +57,12 @@ class DetailsParser:
             return None
     
     @classmethod
-    def parse_si(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
+    def parse_si(cls, html: str, base_info: Optional[Union[Company, dict[str, Any]]] = None) -> CompanyDetails:
         """Parses structured register content (SI - Strukturierter Registerinhalt).
         
         Args:
             html: HTML content of the SI detail view.
-            base_info: Optional base company info from search results.
+            base_info: Optional base company info from search results (Company or dict).
             
         Returns:
             CompanyDetails with parsed information.
@@ -71,13 +71,24 @@ class DetailsParser:
         
         # Initialize with base info or empty
         if base_info:
-            details = CompanyDetails(
-                name=base_info.name,
-                register_num=base_info.register_num or '',
-                court=base_info.court,
-                state=base_info.state,
-                status=base_info.status,
-            )
+            if isinstance(base_info, dict):
+                # Backward compatibility: accept dict
+                details = CompanyDetails(
+                    name=base_info.get('name', ''),
+                    register_num=base_info.get('register_num', '') or '',
+                    court=base_info.get('court', ''),
+                    state=base_info.get('state', ''),
+                    status=base_info.get('status', ''),
+                )
+            else:
+                # Company object
+                details = CompanyDetails(
+                    name=base_info.name,
+                    register_num=base_info.register_num or '',
+                    court=base_info.court,
+                    state=base_info.state,
+                    status=base_info.status,
+                )
         else:
             details = CompanyDetails(
                 name='',
@@ -253,7 +264,7 @@ class DetailsParser:
         return representatives
     
     @classmethod
-    def parse_ad(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
+    def parse_ad(cls, html: str, base_info: Optional[Union[Company, dict[str, Any]]] = None) -> CompanyDetails:
         """Parses current printout (AD - Aktueller Abdruck).
         
         The AD view contains the current state of the register entry as
@@ -304,7 +315,7 @@ class DetailsParser:
         return details
     
     @classmethod
-    def parse_ut(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
+    def parse_ut(cls, html: str, base_info: Optional[Union[Company, dict[str, Any]]] = None) -> CompanyDetails:
         """Parses company owner information (UT - Unternehmensträger).
         
         The UT view focuses on ownership and shareholder information.
@@ -319,13 +330,22 @@ class DetailsParser:
         soup = BeautifulSoup(html, 'html.parser')
         
         if base_info:
-            details = CompanyDetails(
-                name=base_info.name,
-                register_num=base_info.register_num or '',
-                court=base_info.court,
-                state=base_info.state,
-                status=base_info.status,
-            )
+            if isinstance(base_info, dict):
+                details = CompanyDetails(
+                    name=base_info.get('name', ''),
+                    register_num=base_info.get('register_num', '') or '',
+                    court=base_info.get('court', ''),
+                    state=base_info.get('state', ''),
+                    status=base_info.get('status', ''),
+                )
+            else:
+                details = CompanyDetails(
+                    name=base_info.name,
+                    register_num=base_info.register_num or '',
+                    court=base_info.court,
+                    state=base_info.state,
+                    status=base_info.status,
+                )
         else:
             details = CompanyDetails(
                 name='',
