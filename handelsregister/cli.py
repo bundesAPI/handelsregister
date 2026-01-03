@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 import sys
-from typing import Optional
+from typing import Any, Literal, Optional
 
 from .client import HandelsRegister
 from .constants import REGISTER_TYPES, RESULTS_PER_PAGE_OPTIONS, STATE_CODES
@@ -15,7 +15,7 @@ from .exceptions import (
     NetworkError,
     ParseError,
 )
-from .models import CompanyDetails, SearchOptions
+from .models import Company, CompanyDetails, SearchOptions
 
 
 def pr_company_info(c: dict) -> None:
@@ -162,16 +162,16 @@ State codes: {state_codes_help}
 
 def search(
     keywords: str,
-    keyword_option: str = "all",
+    keyword_option: Literal["all", "min", "exact"] = "all",
     states: Optional[list[str]] = None,
-    register_type: Optional[str] = None,
+    register_type: Optional[Literal["HRA", "HRB", "GnR", "PR", "VR"]] = None,
     register_number: Optional[str] = None,
     include_deleted: bool = False,
     similar_sounding: bool = False,
-    results_per_page: int = 100,
+    results_per_page: Literal[10, 25, 50, 100] = 100,
     force_refresh: bool = False,
     debug: bool = False,
-) -> list[dict]:
+) -> list[Company]:
     """Durchsucht das Handelsregister nach Unternehmen.
     
     Dies ist die Haupt-API für die programmatische Nutzung des Packages.
@@ -252,7 +252,7 @@ def search_batch(
     continue_on_error: bool = True,
     raise_partial: bool = False,
     **kwargs
-) -> dict[str, list[dict]]:
+) -> dict[str, list[Company]]:
     """Performs multiple searches with progress indicators and error recovery.
     
     Useful for batch processing multiple keywords or search terms.
@@ -295,7 +295,7 @@ def search_batch(
     if show_progress is None:
         show_progress = sys.stdout.isatty() and len(keywords_list) > 1
     
-    results: dict[str, list[dict]] = {}
+    results: dict[str, list[Company]] = {}
     failed: list[tuple[str, Exception]] = []
     iterator = tqdm(keywords_list, desc="Searching", unit="keyword", disable=not show_progress)
     
@@ -340,8 +340,8 @@ def search_batch(
 
 
 def get_details(
-    company: dict,
-    detail_type: str = "SI",
+    company: Company,
+    detail_type: Literal["SI", "AD", "UT", "CD", "HD", "VÖ"] = "SI",
     force_refresh: bool = False,
     debug: bool = False,
 ) -> CompanyDetails:
@@ -383,8 +383,8 @@ def get_details(
     hr = HandelsRegister(debug=debug)
     hr.open_startpage()
     
-    register_num = company.get('register_num', '')
-    name = company.get('name', '')
+    register_num = company.register_num or ''
+    name = company.name
     
     if register_num:
         search_opts = SearchOptions(
@@ -398,7 +398,7 @@ def get_details(
         )
     
     hr.search_with_options(search_opts, force_refresh=force_refresh)
-    company['row_index'] = 0
+    company.row_index = 0
     return hr.get_company_details(company, detail_type, force_refresh)
 
 

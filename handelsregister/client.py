@@ -6,7 +6,7 @@ import pathlib
 import sys
 import time
 import urllib.error
-from typing import Optional
+from typing import Any, Literal, Optional
 
 import mechanize
 from ratelimit import limits, sleep_and_retry
@@ -22,7 +22,7 @@ from tqdm import tqdm
 from .cache import SearchCache
 from .constants import KEYWORD_OPTIONS, RESULTS_PER_PAGE_OPTIONS, STATE_CODES
 from .exceptions import FormError, NetworkError, ParseError, PartialResultError
-from .models import CacheEntry, CompanyDetails, SearchOptions
+from .models import CacheEntry, Company, CompanyDetails, SearchOptions
 from .parser import DetailsParser, ResultParser
 from .settings import (
     BASE_URL,
@@ -182,7 +182,7 @@ class HandelsRegister:
         self,
         options: SearchOptions,
         force_refresh: bool = False,
-    ) -> list[dict]:
+    ) -> list[Company]:
         """Führt eine Suche mit SearchOptions durch.
         
         Args:
@@ -214,7 +214,7 @@ class HandelsRegister:
         
         return ResultParser.parse_search_results(html)
     
-    def search_company(self) -> list[dict]:
+    def search_company(self) -> list[Company]:
         """Sucht nach Unternehmen basierend auf CLI-Argumenten.
         
         Hinweis: Für programmatische Nutzung wird search_with_options() empfohlen.
@@ -393,10 +393,10 @@ class HandelsRegister:
     
     def get_company_details(
         self,
-        company: dict,
-        detail_type: str = "SI",
+        company: Company,
+        detail_type: Literal["SI", "AD", "UT", "CD", "HD", "VÖ"] = "SI",
         force_refresh: bool = False,
-        fallback_types: Optional[list[str]] = None,
+        fallback_types: Optional[list[Literal["SI", "AD", "UT", "CD", "HD", "VÖ"]]] = None,
     ) -> CompanyDetails:
         """Fetches detailed company information with optional fallback strategies.
         
@@ -431,7 +431,7 @@ class HandelsRegister:
         last_error: Optional[Exception] = None
         
         for attempt_type in types_to_try:
-            cache_key = f"details:{attempt_type}:{company.get('register_num', '')}:{company.get('court', '')}"
+            cache_key = f"details:{attempt_type}:{company.register_num or ''}:{company.court}"
             
             try:
                 if not force_refresh:
@@ -483,7 +483,7 @@ class HandelsRegister:
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    def _fetch_detail_page(self, company: dict, detail_type: str) -> str:
+    def _fetch_detail_page(self, company: Company, detail_type: str) -> str:
         """Fetches a detail page for a company with retries.
         
         The Handelsregister uses JSF/PrimeFaces which requires specific
@@ -498,7 +498,7 @@ class HandelsRegister:
         Returns:
             HTML content of the detail page.
         """
-        row_index = company.get('row_index', 0)
+        row_index = company.row_index or 0
         
         detail_type_mapping = {
             'AD': 'ergebnissForm:selectedSuchErgebnisFormTable:{row}:j_idt161:0:fade',
@@ -527,15 +527,15 @@ class HandelsRegister:
                 original_error=e
             ) from e
     
-    def _fetch_detail_alternative(self, company: dict, detail_type: str) -> str:
+    def _fetch_detail_alternative(self, company: Company, detail_type: str) -> str:
         """Alternative method to fetch details when form is not available.
         
         This method constructs a direct request based on company information.
         Full implementation requires JSF viewstate handling.
         """
-        register_num = company.get('register_num', '')
-        _court = company.get('court', '')
-        _state = company.get('state', '')
+        register_num = company.register_num or ''
+        _court = company.court
+        _state = company.state
         
         logger.warning(
             "Alternative fetch not fully implemented for %s %s", 
@@ -546,7 +546,7 @@ class HandelsRegister:
     def _parse_details(
         self, 
         html: str, 
-        company: dict, 
+        company: Company, 
         detail_type: str
     ) -> CompanyDetails:
         """Parses detail HTML into CompanyDetails.
@@ -572,7 +572,7 @@ class HandelsRegister:
         self,
         options: SearchOptions,
         fetch_details: bool = True,
-        detail_type: str = "SI",
+        detail_type: Literal["SI", "AD", "UT", "CD", "HD", "VÖ"] = "SI",
         force_refresh: bool = False,
         show_progress: Optional[bool] = None,
         continue_on_error: bool = True,
@@ -605,12 +605,12 @@ class HandelsRegister:
             show_progress = sys.stdout.isatty() and len(companies) > 1
         
         results: list[CompanyDetails] = []
-        failed: list[tuple[dict, Exception]] = []
+        failed: list[tuple[Company, Exception]] = []
         iterator = tqdm(companies, desc="Fetching details", unit="company", disable=not show_progress)
         
         for i, company in enumerate(iterator):
-            company['row_index'] = i
-            company_name = company.get('name', 'unknown')
+            company.row_index = i
+            company_name = company.name
             if show_progress:
                 iterator.set_postfix(name=company_name[:30])
             
@@ -628,7 +628,7 @@ class HandelsRegister:
                 logger.warning(
                     "Failed to fetch details for %s (%s): %s",
                     company_name,
-                    company.get('register_num', 'N/A'),
+                    company.register_num or 'N/A',
                     e
                 )
                 

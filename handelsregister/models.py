@@ -2,12 +2,14 @@
 
 import time
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from .constants import STATE_CODES, RESULTS_PER_PAGE_OPTIONS
 from .settings import DEFAULT_CACHE_TTL_SECONDS
+
+
 
 
 @dataclass
@@ -229,19 +231,23 @@ class CompanyDetails(BaseModel):
         return data
     
     @classmethod
-    def from_company(cls, company: dict) -> 'CompanyDetails':
-        """Creates CompanyDetails from a basic company search result dict."""
+    def from_company(cls, company: 'Company') -> 'CompanyDetails':
+        """Creates CompanyDetails from a Company search result."""
         return cls(
-            name=company.get('name', ''),
-            register_num=company.get('register_num', ''),
-            court=company.get('court', ''),
-            state=company.get('state', ''),
-            status=company.get('status', ''),
+            name=company.name,
+            register_num=company.register_num or '',
+            court=company.court,
+            state=company.state,
+            status=company.status,
         )
 
 
 class Company(BaseModel):
-    """Represents a company record from the Handelsregister."""
+    """Represents a company record from the Handelsregister.
+    
+    This is the primary model for search results. It provides validation
+    and type safety while maintaining backward compatibility with dict access.
+    """
     model_config = ConfigDict(frozen=False, populate_by_name=True)
     
     court: str
@@ -252,6 +258,7 @@ class Company(BaseModel):
     documents: str
     register_num: Optional[str] = None
     history: list[HistoryEntry] = Field(default_factory=list)
+    row_index: Optional[int] = Field(default=None, exclude=True)  # Internal use for detail fetching
 
     def to_dict(self) -> dict:
         """Converts to dictionary for backward compatibility."""
@@ -265,4 +272,8 @@ class Company(BaseModel):
             'documents': self.documents,
             'history': [(h.name, h.location) for h in self.history]
         }
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dict-like access for backward compatibility."""
+        return getattr(self, key, default)
 

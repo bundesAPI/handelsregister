@@ -1,7 +1,7 @@
 """HTML parsing layer for the Handelsregister package."""
 
 import re
-from typing import Optional
+from typing import Any, Literal, Optional
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -10,7 +10,7 @@ from dateutil.parser import ParserError
 
 from .constants import SUFFIX_MAP
 from .exceptions import ParseError
-from .models import Address, CompanyDetails, Owner, Representative
+from .models import Address, Company, CompanyDetails, HistoryEntry, Owner, Representative
 
 
 class DetailsParser:
@@ -57,7 +57,7 @@ class DetailsParser:
             return None
     
     @classmethod
-    def parse_si(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+    def parse_si(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
         """Parses structured register content (SI - Strukturierter Registerinhalt).
         
         Args:
@@ -70,13 +70,22 @@ class DetailsParser:
         soup = BeautifulSoup(html, 'html.parser')
         
         # Initialize with base info or empty
-        details = CompanyDetails(
-            name=base_info.get('name', '') if base_info else '',
-            register_num=base_info.get('register_num', '') if base_info else '',
-            court=base_info.get('court', '') if base_info else '',
-            state=base_info.get('state', '') if base_info else '',
-            status=base_info.get('status', '') if base_info else '',
-        )
+        if base_info:
+            details = CompanyDetails(
+                name=base_info.name,
+                register_num=base_info.register_num or '',
+                court=base_info.court,
+                state=base_info.state,
+                status=base_info.status,
+            )
+        else:
+            details = CompanyDetails(
+                name='',
+                register_num='',
+                court='',
+                state='',
+                status='',
+            )
         
         # Parse structured content - typically in tables or definition lists
         details = cls._parse_si_tables(soup, details)
@@ -244,7 +253,7 @@ class DetailsParser:
         return representatives
     
     @classmethod
-    def parse_ad(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+    def parse_ad(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
         """Parses current printout (AD - Aktueller Abdruck).
         
         The AD view contains the current state of the register entry as
@@ -295,7 +304,7 @@ class DetailsParser:
         return details
     
     @classmethod
-    def parse_ut(cls, html: str, base_info: Optional[dict] = None) -> CompanyDetails:
+    def parse_ut(cls, html: str, base_info: Optional[Company] = None) -> CompanyDetails:
         """Parses company owner information (UT - Unternehmensträger).
         
         The UT view focuses on ownership and shareholder information.
@@ -309,13 +318,22 @@ class DetailsParser:
         """
         soup = BeautifulSoup(html, 'html.parser')
         
-        details = CompanyDetails(
-            name=base_info.get('name', '') if base_info else '',
-            register_num=base_info.get('register_num', '') if base_info else '',
-            court=base_info.get('court', '') if base_info else '',
-            state=base_info.get('state', '') if base_info else '',
-            status=base_info.get('status', '') if base_info else '',
-        )
+        if base_info:
+            details = CompanyDetails(
+                name=base_info.name,
+                register_num=base_info.register_num or '',
+                court=base_info.court,
+                state=base_info.state,
+                status=base_info.status,
+            )
+        else:
+            details = CompanyDetails(
+                name='',
+                register_num='',
+                court='',
+                state='',
+                status='',
+            )
         
         details = cls._parse_si_tables(soup, details)
         text = soup.get_text()
@@ -401,19 +419,19 @@ class ResultParser:
     """Parses HTML search results into structured company data."""
     
     @staticmethod
-    def parse_search_results(html: str) -> list[dict]:
+    def parse_search_results(html: str) -> list[Company]:
         """Extracts company records from search results HTML.
         
         Args:
             html: HTML content of the search results page.
             
         Returns:
-            List of dictionaries with company information.
+            List of Company objects with company information.
         """
         soup = BeautifulSoup(html, 'html.parser')
         grid = soup.find('table', role='grid')
         
-        results: list[dict] = []
+        results: list[Company] = []
         if grid is None:
             return results
             
@@ -421,19 +439,22 @@ class ResultParser:
             data_ri = row.get('data-ri')
             if data_ri is not None:
                 company_data = ResultParser.parse_result_row(row)
-                results.append(company_data)
+                results.append(Company.model_validate(company_data))
                 
         return results
     
     @staticmethod
-    def parse_result_row(row: Tag) -> dict:
+    def parse_result_row(row: Tag) -> dict[str, Any]:
         """Parses a single search result row into a company dictionary.
+        
+        This returns a dict that can be validated into a Company model.
+        Use parse_search_results() to get Company objects directly.
         
         Args:
             row: BeautifulSoup Tag representing a table row.
             
         Returns:
-            Dictionary containing company information.
+            Dictionary containing company information (ready for Company.model_validate).
             
         Raises:
             ParseError: If the result row has unexpected structure.
@@ -454,7 +475,8 @@ class ResultParser:
         register_num = ResultParser._extract_register_number(court, state)
         
         # Parse history entries
-        history = ResultParser._parse_history(cells)
+        history_tuples = ResultParser._parse_history(cells)
+        history = [HistoryEntry(name=name, location=location) for name, location in history_tuples]
         
         return {
             'court': court,
@@ -515,15 +537,16 @@ class ResultParser:
 
 
 # Backward-compatible function aliases
-def parse_result(result: Tag) -> dict:
-    """Parses a single search result row into a company dictionary.
+def parse_result(result: Tag) -> Company:
+    """Parses a single search result row into a Company object.
     
-    Deprecated: Use ResultParser.parse_result_row() instead.
+    Deprecated: Use ResultParser.parse_result_row() and Company.model_validate() instead.
     """
-    return ResultParser.parse_result_row(result)
+    data = ResultParser.parse_result_row(result)
+    return Company.model_validate(data)
 
 
-def get_companies_in_searchresults(html: str) -> list[dict]:
+def get_companies_in_searchresults(html: str) -> list[Company]:
     """Extracts company records from search results HTML.
     
     Deprecated: Use ResultParser.parse_search_results() instead.

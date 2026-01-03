@@ -86,13 +86,14 @@ class TestParseSearchResults:
         assert len(result) == 1
         company = result[0]
         
-        assert company['name'] == 'GASAG AG'
-        assert company['state'] == 'Berlin'
-        assert company['register_num'] == 'HRB 44343 B'
-        assert company['status'] == 'currently registered'
-        assert company['statusCurrent'] == 'CURRENTLY_REGISTERED'
-        assert len(company['history']) == 1
-        assert company['history'][0] == ('1.) Gasag Berliner Gaswerke Aktiengesellschaft', '1.) Berlin')
+        assert company.name == 'GASAG AG'
+        assert company.state == 'Berlin'
+        assert company.register_num == 'HRB 44343 B'
+        assert company.status == 'currently registered'
+        assert company.status_normalized == 'CURRENTLY_REGISTERED'
+        assert len(company.history) == 1
+        assert company.history[0].name == '1.) Gasag Berliner Gaswerke Aktiengesellschaft'
+        assert company.history[0].location == '1.) Berlin'
 
     def test_parse_empty_html(self):
         """Test parsing empty HTML returns empty list."""
