@@ -10,8 +10,6 @@ from .constants import STATE_CODES, RESULTS_PER_PAGE_OPTIONS
 from .settings import DEFAULT_CACHE_TTL_SECONDS
 
 
-
-
 @dataclass
 class CacheEntry:
     """Represents a cached search result with metadata.
