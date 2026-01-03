@@ -2,20 +2,37 @@
 
 Unit tests run without network access and use mocked responses.
 Integration tests hit the live API and are marked with @pytest.mark.integration.
+
+⚠️  CRITICAL RATE LIMIT WARNING:
+   The integration tests make exactly 60 API requests (the rate limit per hour).
+   Each test makes 3 requests: open_startpage + navigate + submit_search.
+   With 20 tests total (16 parametrized + 4 others), this hits the limit exactly.
+
+   The ratelimit library will automatically sleep when the limit is reached, but:
+   - Tests will be very slow (potentially >1 hour)
+   - No safety margin for retries or re-runs
+   - Risk of hitting limit if tests run multiple times
+
+   Recommendations:
+   - Run only a subset: pytest -m integration -k "test_search_function"
+   - Remove force_refresh=True to use cached results
+   - Reduce parametrized test cases (currently 16, could be 8-10)
+   - Add delays between test runs
+   - Consider using a shared test cache
 """
 
 import argparse
-import json
-import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from handelsregister import (
-    Address,
     BASE_URL,
+    DEFAULT_CACHE_TTL_SECONDS,
+    REGISTER_TYPES,
+    STATE_CODES,
+    SUFFIX_MAP,
+    Address,
     CacheEntry,
     Company,
     CompanyDetails,
@@ -23,28 +40,21 @@ from handelsregister import (
     HandelsRegister,
     HistoryEntry,
     Owner,
-    ParseError,
     Representative,
-    ResultParser,
     SearchCache,
     SearchOptions,
     Settings,
     build_url,
     get_companies_in_searchresults,
-    settings,
     get_details,
-    parse_result,
     search,
-    SUFFIX_MAP,
-    STATE_CODES,
-    REGISTER_TYPES,
-    DEFAULT_CACHE_TTL_SECONDS,
+    settings,
 )
-
 
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def sample_search_html():
@@ -56,11 +66,7 @@ def sample_search_html():
 def mock_args():
     """Create mock arguments for HandelsRegister."""
     return argparse.Namespace(
-        debug=False,
-        force=False,
-        schlagwoerter='Test Company',
-        schlagwortOptionen='all',
-        json=False
+        debug=False, force=False, schlagwoerter="Test Company", schlagwortOptionen="all", json=False
     )
 
 
@@ -76,44 +82,45 @@ def temp_cache_dir(tmp_path):
 # Unit Tests - Parsing
 # =============================================================================
 
+
 class TestParseSearchResults:
     """Unit tests for HTML parsing functions."""
 
     def test_parse_search_result_gasag(self, sample_search_html):
         """Test parsing a search result for GASAG AG."""
         result = get_companies_in_searchresults(sample_search_html)
-        
+
         assert len(result) == 1
         company = result[0]
-        
-        assert company.name == 'GASAG AG'
-        assert company.state == 'Berlin'
-        assert company.register_num == 'HRB 44343 B'
-        assert company.status == 'currently registered'
-        assert company.status_normalized == 'CURRENTLY_REGISTERED'
+
+        assert company.name == "GASAG AG"
+        assert company.state == "Berlin"
+        assert company.register_num == "HRB 44343 B"
+        assert company.status == "currently registered"
+        assert company.status_normalized == "CURRENTLY_REGISTERED"
         assert len(company.history) == 1
-        assert company.history[0].name == '1.) Gasag Berliner Gaswerke Aktiengesellschaft'
-        assert company.history[0].location == '1.) Berlin'
+        assert company.history[0].name == "1.) Gasag Berliner Gaswerke Aktiengesellschaft"
+        assert company.history[0].location == "1.) Berlin"
 
     def test_parse_empty_html(self):
         """Test parsing empty HTML returns empty list."""
-        result = get_companies_in_searchresults('<html><body></body></html>')
+        result = get_companies_in_searchresults("<html><body></body></html>")
         assert result == []
 
     def test_parse_no_grid_table(self):
         """Test parsing HTML without grid table returns empty list."""
-        html = '<html><body><table><tr><td>No grid</td></tr></table></body></html>'
+        html = "<html><body><table><tr><td>No grid</td></tr></table></body></html>"
         result = get_companies_in_searchresults(html)
         assert result == []
 
 
 class TestDetailsParser:
     """Unit tests for DetailsParser (SI/AD/UT parsing)."""
-    
+
     @pytest.fixture
     def sample_si_html(self):
         """Sample HTML from structured register content (SI)."""
-        return '''
+        return """
         <html>
         <body>
         <table>
@@ -128,12 +135,12 @@ class TestDetailsParser:
         <div>Vorstand: Dr. Gerhard Holtmeier (Berlin)</div>
         </body>
         </html>
-        '''
-    
+        """
+
     @pytest.fixture
     def sample_si_gmbh_html(self):
         """Sample HTML for a GmbH."""
-        return '''
+        return """
         <html>
         <body>
         <table>
@@ -144,140 +151,140 @@ class TestDetailsParser:
         <p>Geschäftsführer: Max Mustermann</p>
         </body>
         </html>
-        '''
-    
+        """
+
     def test_parse_si_basic(self, sample_si_html):
         """Test parsing basic SI content."""
         details = DetailsParser.parse_si(sample_si_html)
-        
+
         assert details.name == "GASAG AG"
         assert details.legal_form == "Aktiengesellschaft"
         assert "307.200.000" in details.capital
         assert details.currency == "EUR"
-    
+
     def test_parse_si_with_base_info(self, sample_si_html):
         """Test parsing SI with base company info."""
         base_info = {
-            'name': 'GASAG AG',
-            'register_num': 'HRB 44343 B',
-            'court': 'Amtsgericht Berlin',
-            'state': 'Berlin',
-            'status': 'aktuell',
+            "name": "GASAG AG",
+            "register_num": "HRB 44343 B",
+            "court": "Amtsgericht Berlin",
+            "state": "Berlin",
+            "status": "aktuell",
         }
         details = DetailsParser.parse_si(sample_si_html, base_info)
-        
+
         assert details.court == "Amtsgericht Berlin"
         assert details.state == "Berlin"
         assert details.status == "aktuell"
-    
+
     def test_parse_si_address(self, sample_si_html):
         """Test parsing address from SI."""
         details = DetailsParser.parse_si(sample_si_html)
-        
+
         assert details.address is not None
         assert details.address.street == "GASAG-Platz 1"
         assert details.address.postal_code == "10965"
         assert details.address.city == "Berlin"
-    
+
     def test_parse_si_purpose(self, sample_si_html):
         """Test parsing company purpose from SI."""
         details = DetailsParser.parse_si(sample_si_html)
-        
+
         assert details.purpose is not None
         assert "Versorgung" in details.purpose
         assert "Gas" in details.purpose
-    
+
     def test_parse_si_representatives(self, sample_si_html):
         """Test parsing representatives from SI."""
         details = DetailsParser.parse_si(sample_si_html)
-        
+
         assert len(details.representatives) >= 1
         vorstand = next((r for r in details.representatives if r.role == "Vorstand"), None)
         assert vorstand is not None
         assert "Holtmeier" in vorstand.name
-    
+
     def test_parse_si_gmbh(self, sample_si_gmbh_html):
         """Test parsing GmbH company."""
         details = DetailsParser.parse_si(sample_si_gmbh_html)
-        
+
         assert details.name == "Test GmbH"
         assert details.legal_form == "Gesellschaft mit beschränkter Haftung"
         assert "25.000" in details.capital
         assert details.currency == "EUR"
-    
+
     def test_parse_si_gmbh_geschaeftsfuehrer(self, sample_si_gmbh_html):
         """Test parsing Geschäftsführer from GmbH."""
         details = DetailsParser.parse_si(sample_si_gmbh_html)
-        
+
         gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
         assert gf is not None
         assert "Mustermann" in gf.name
-    
+
     def test_parse_address_full(self):
         """Test _parse_address with full address."""
         addr = DetailsParser._parse_address("Musterstraße 123, 10115 Berlin")
-        
+
         assert addr.street == "Musterstraße 123"
         assert addr.postal_code == "10115"
         assert addr.city == "Berlin"
-    
+
     def test_parse_address_city_only(self):
         """Test _parse_address with city only."""
         addr = DetailsParser._parse_address("Hamburg")
-        
+
         assert addr.city == "Hamburg"
         assert addr.street is None
         assert addr.postal_code is None
-    
+
     def test_extract_legal_form_ag(self):
         """Test extracting Aktiengesellschaft."""
         result = DetailsParser._extract_legal_form("Eine Aktiengesellschaft")
         assert result == "Aktiengesellschaft"
-    
+
     def test_extract_legal_form_gmbh(self):
         """Test extracting GmbH."""
         result = DetailsParser._extract_legal_form("Test GmbH")
         assert result == "Gesellschaft mit beschränkter Haftung"
-    
+
     def test_extract_legal_form_kg(self):
         """Test extracting Kommanditgesellschaft."""
         result = DetailsParser._extract_legal_form("Muster GmbH & Co. KG")
         assert result == "GmbH & Co. KG"
-    
+
     def test_extract_legal_form_none(self):
         """Test no legal form found."""
         result = DetailsParser._extract_legal_form("Some random text")
         assert result is None
-    
+
     def test_parse_date_german_format(self):
         """Test parsing German date format DD.MM.YYYY."""
         result = DetailsParser.parse_date("15.03.2024")
         assert result == "15.03.2024"
-    
+
     def test_parse_date_in_text(self):
         """Test parsing date embedded in text."""
         result = DetailsParser.parse_date("Eingetragen am 01.01.2020 in Berlin")
         assert result == "01.01.2020"
-    
+
     def test_parse_date_invalid(self):
         """Test that invalid text returns None."""
         result = DetailsParser.parse_date("No date here")
         assert result is None
-    
+
     def test_parse_date_various_formats(self):
         """Test that various German dates are parsed correctly."""
         # Day first format
         result = DetailsParser.parse_date("5.1.2023")
         assert result == "05.01.2023"
-        
+
         # Full date
         result = DetailsParser.parse_date("31.12.2022")
         assert result == "31.12.2022"
-    
+
     def test_parse_empty_html(self):
         """Test parsing empty HTML."""
         details = DetailsParser.parse_si("<html><body></body></html>")
-        
+
         assert details.name == ""
         assert details.capital is None
         assert details.representatives == []
@@ -286,6 +293,7 @@ class TestDetailsParser:
 # =============================================================================
 # Unit Tests - Data Classes
 # =============================================================================
+
 
 class TestDataClasses:
     """Unit tests for dataclass functionality."""
@@ -306,26 +314,21 @@ class TestDataClasses:
             status_normalized="ACTIVE",
             documents="AD",
             register_num="HRB 12345",
-            history=[HistoryEntry(name="Old", location="Berlin")]
+            history=[HistoryEntry(name="Old", location="Berlin")],
         )
-        
+
         d = company.to_dict()
-        
-        assert d['court'] == "Test Court"
-        assert d['name'] == "Test Company"
-        assert d['state'] == "Berlin"
-        assert d['register_num'] == "HRB 12345"
-        assert d['statusCurrent'] == "ACTIVE"
-        assert d['history'] == [("Old", "Berlin")]
+
+        assert d["court"] == "Test Court"
+        assert d["name"] == "Test Company"
+        assert d["state"] == "Berlin"
+        assert d["register_num"] == "HRB 12345"
+        assert d["statusCurrent"] == "ACTIVE"
+        assert d["history"] == [("Old", "Berlin")]
 
     def test_cache_entry_not_expired(self):
         """Test CacheEntry.is_expired() returns False for fresh entry."""
-        entry = CacheEntry(
-            query="test",
-            options="all",
-            timestamp=time.time(),
-            html="<html></html>"
-        )
+        entry = CacheEntry(query="test", options="all", timestamp=time.time(), html="<html></html>")
         assert not entry.is_expired()
 
     def test_cache_entry_expired(self):
@@ -334,22 +337,19 @@ class TestDataClasses:
             query="test",
             options="all",
             timestamp=time.time() - DEFAULT_CACHE_TTL_SECONDS - 1,
-            html="<html></html>"
+            html="<html></html>",
         )
         assert entry.is_expired()
 
     def test_cache_entry_serialization(self):
         """Test CacheEntry to_dict and from_dict."""
         original = CacheEntry(
-            query="test query",
-            options="exact",
-            timestamp=1234567890.0,
-            html="<html>test</html>"
+            query="test query", options="exact", timestamp=1234567890.0, html="<html>test</html>"
         )
-        
+
         serialized = original.to_dict()
         restored = CacheEntry.from_dict(serialized)
-        
+
         assert restored.query == original.query
         assert restored.options == original.options
         assert restored.timestamp == original.timestamp
@@ -361,7 +361,7 @@ class TestDataClasses:
         opts2 = SearchOptions(keywords="test", keyword_option="all")
         opts3 = SearchOptions(keywords="test", keyword_option="exact")
         opts4 = SearchOptions(keywords="test", keyword_option="all", states=["BE"])
-        
+
         assert opts1.cache_key() == opts2.cache_key()
         assert opts1.cache_key() != opts3.cache_key()
         assert opts1.cache_key() != opts4.cache_key()
@@ -369,7 +369,7 @@ class TestDataClasses:
     def test_search_options_defaults(self):
         """Test SearchOptions default values."""
         opts = SearchOptions(keywords="test")
-        
+
         assert opts.keyword_option == "all"
         assert opts.states is None
         assert opts.register_type is None
@@ -381,179 +381,173 @@ class TestDataClasses:
 
 class TestPydanticValidation:
     """Unit tests for Pydantic validation on models."""
-    
+
     def test_search_options_keyword_validation(self):
         """Test that empty keywords are rejected."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             SearchOptions(keywords="")
-    
+
     def test_search_options_keyword_option_validation(self):
         """Test that invalid keyword_option values are rejected."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             SearchOptions(keywords="test", keyword_option="invalid")
-    
+
     def test_search_options_states_validation(self):
         """Test that invalid state codes are rejected."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             SearchOptions(keywords="test", states=["INVALID"])
-    
+
     def test_search_options_states_normalized(self):
         """Test that state codes are normalized to uppercase."""
         opts = SearchOptions(keywords="test", states=["be", "hh"])
         assert opts.states == ["BE", "HH"]
-    
+
     def test_search_options_register_type_validation(self):
         """Test that invalid register types are rejected."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             SearchOptions(keywords="test", register_type="INVALID")
-    
+
     def test_search_options_results_per_page_validation(self):
         """Test that invalid results_per_page values are rejected."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             SearchOptions(keywords="test", results_per_page=999)
-    
+
     def test_representative_name_required(self):
         """Test that Representative requires a name."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             Representative(name="", role="Geschäftsführer")
-    
+
     def test_owner_name_required(self):
         """Test that Owner requires a name."""
         import pytest
         from pydantic import ValidationError
-        
+
         with pytest.raises(ValidationError):
             Owner(name="")
-    
+
     def test_company_details_from_dict(self):
         """Test creating CompanyDetails from model_validate."""
         data = {
-            'name': 'Test GmbH',
-            'register_num': 'HRB 12345',
-            'court': 'Berlin',
-            'state': 'Berlin',
-            'status': 'active',
+            "name": "Test GmbH",
+            "register_num": "HRB 12345",
+            "court": "Berlin",
+            "state": "Berlin",
+            "status": "active",
         }
         details = CompanyDetails.model_validate(data)
-        assert details.name == 'Test GmbH'
-        assert details.register_num == 'HRB 12345'
-    
+        assert details.name == "Test GmbH"
+        assert details.register_num == "HRB 12345"
+
     def test_address_model_dump(self):
         """Test Address model_dump for JSON serialization."""
         addr = Address(street="Test 1", postal_code="12345", city="Berlin")
         dumped = addr.model_dump()
-        assert dumped['street'] == "Test 1"
-        assert dumped['postal_code'] == "12345"
-        assert dumped['city'] == "Berlin"
+        assert dumped["street"] == "Test 1"
+        assert dumped["postal_code"] == "12345"
+        assert dumped["city"] == "Berlin"
 
 
 class TestAddress:
     """Unit tests for Address dataclass."""
-    
+
     def test_address_str_full(self):
         """Test Address.__str__() with all fields."""
         addr = Address(
-            street="Musterstraße 123",
-            postal_code="10115",
-            city="Berlin",
-            country="Deutschland"
+            street="Musterstraße 123", postal_code="10115", city="Berlin", country="Deutschland"
         )
         assert str(addr) == "Musterstraße 123, 10115 Berlin"
-    
+
     def test_address_str_minimal(self):
         """Test Address.__str__() with minimal fields."""
         addr = Address(city="Hamburg")
         assert str(addr) == "Hamburg"
-    
+
     def test_address_str_empty(self):
         """Test Address.__str__() with no fields."""
         addr = Address()
         assert str(addr) == ""
-    
+
     def test_address_str_foreign(self):
         """Test Address.__str__() with foreign country."""
         addr = Address(city="Wien", country="Österreich")
         assert str(addr) == "Wien, Österreich"
-    
+
     def test_address_to_dict(self):
         """Test Address.to_dict()."""
         addr = Address(street="Test 1", postal_code="12345", city="Berlin")
         d = addr.to_dict()
-        assert d['street'] == "Test 1"
-        assert d['postal_code'] == "12345"
-        assert d['city'] == "Berlin"
-        assert d['country'] == "Deutschland"
+        assert d["street"] == "Test 1"
+        assert d["postal_code"] == "12345"
+        assert d["city"] == "Berlin"
+        assert d["country"] == "Deutschland"
 
 
 class TestRepresentative:
     """Unit tests for Representative dataclass."""
-    
+
     def test_representative_creation(self):
         """Test creating a Representative."""
         rep = Representative(
             name="Max Mustermann",
             role="Geschäftsführer",
             location="Berlin",
-            restrictions="einzelvertretungsberechtigt"
+            restrictions="einzelvertretungsberechtigt",
         )
         assert rep.name == "Max Mustermann"
         assert rep.role == "Geschäftsführer"
         assert rep.location == "Berlin"
         assert rep.restrictions == "einzelvertretungsberechtigt"
-    
+
     def test_representative_to_dict(self):
         """Test Representative.to_dict()."""
         rep = Representative(name="Test", role="Vorstand")
         d = rep.to_dict()
-        assert d['name'] == "Test"
-        assert d['role'] == "Vorstand"
-        assert d['location'] is None
+        assert d["name"] == "Test"
+        assert d["role"] == "Vorstand"
+        assert d["location"] is None
 
 
 class TestOwner:
     """Unit tests for Owner dataclass."""
-    
+
     def test_owner_creation(self):
         """Test creating an Owner."""
         owner = Owner(
-            name="Holding GmbH",
-            share="100%",
-            owner_type="Gesellschafter",
-            location="München"
+            name="Holding GmbH", share="100%", owner_type="Gesellschafter", location="München"
         )
         assert owner.name == "Holding GmbH"
         assert owner.share == "100%"
         assert owner.owner_type == "Gesellschafter"
-    
+
     def test_owner_to_dict(self):
         """Test Owner.to_dict()."""
         owner = Owner(name="Test GmbH", share="50.000 EUR")
         d = owner.to_dict()
-        assert d['name'] == "Test GmbH"
-        assert d['share'] == "50.000 EUR"
+        assert d["name"] == "Test GmbH"
+        assert d["share"] == "50.000 EUR"
 
 
 class TestCompanyDetails:
     """Unit tests for CompanyDetails dataclass."""
-    
+
     def test_company_details_creation(self):
         """Test creating CompanyDetails with all fields."""
         details = CompanyDetails(
@@ -567,15 +561,13 @@ class TestCompanyDetails:
             currency="EUR",
             address=Address(street="GASAG-Platz 1", postal_code="10965", city="Berlin"),
             purpose="Versorgung mit Energie",
-            representatives=[
-                Representative(name="Dr. Gerhard Holtmeier", role="Vorstand")
-            ],
+            representatives=[Representative(name="Dr. Gerhard Holtmeier", role="Vorstand")],
         )
         assert details.name == "GASAG AG"
         assert details.legal_form == "Aktiengesellschaft"
         assert details.capital == "307.200.000"
         assert len(details.representatives) == 1
-    
+
     def test_company_details_to_dict(self):
         """Test CompanyDetails.to_dict()."""
         details = CompanyDetails(
@@ -589,26 +581,26 @@ class TestCompanyDetails:
             currency="EUR",
         )
         d = details.to_dict()
-        assert d['name'] == "Test GmbH"
-        assert d['legal_form'] == "GmbH"
-        assert d['capital'] == "25.000"
-        assert d['representatives'] == []
-        assert d['owners'] == []
-    
+        assert d["name"] == "Test GmbH"
+        assert d["legal_form"] == "GmbH"
+        assert d["capital"] == "25.000"
+        assert d["representatives"] == []
+        assert d["owners"] == []
+
     def test_company_details_from_company(self):
         """Test CompanyDetails.from_company() class method."""
         company = {
-            'name': 'GASAG AG',
-            'register_num': 'HRB 44343 B',
-            'court': 'Berlin Amtsgericht',
-            'state': 'Berlin',
-            'status': 'aktuell',
+            "name": "GASAG AG",
+            "register_num": "HRB 44343 B",
+            "court": "Berlin Amtsgericht",
+            "state": "Berlin",
+            "status": "aktuell",
         }
         details = CompanyDetails.from_company(company)
         assert details.name == "GASAG AG"
         assert details.register_num == "HRB 44343 B"
         assert details.legal_form is None  # Not set from basic company
-    
+
     def test_company_details_defaults(self):
         """Test CompanyDetails default values."""
         details = CompanyDetails(
@@ -629,33 +621,34 @@ class TestCompanyDetails:
 # Unit Tests - Configuration
 # =============================================================================
 
+
 class TestConfiguration:
     """Unit tests for configuration constants."""
 
     def test_state_codes_complete(self):
         """Test that all 16 German states are defined."""
         assert len(STATE_CODES) == 16
-        assert 'BE' in STATE_CODES  # Berlin
-        assert 'BY' in STATE_CODES  # Bayern
-        assert 'NW' in STATE_CODES  # Nordrhein-Westfalen
+        assert "BE" in STATE_CODES  # Berlin
+        assert "BY" in STATE_CODES  # Bayern
+        assert "NW" in STATE_CODES  # Nordrhein-Westfalen
 
     def test_register_types(self):
         """Test that all register types are defined."""
-        assert 'HRA' in REGISTER_TYPES
-        assert 'HRB' in REGISTER_TYPES
-        assert 'GnR' in REGISTER_TYPES
-        assert 'VR' in REGISTER_TYPES
-        assert 'PR' in REGISTER_TYPES
+        assert "HRA" in REGISTER_TYPES
+        assert "HRB" in REGISTER_TYPES
+        assert "GnR" in REGISTER_TYPES
+        assert "VR" in REGISTER_TYPES
+        assert "PR" in REGISTER_TYPES
 
 
 class TestSettings:
     """Unit tests for pydantic-settings configuration."""
-    
+
     def test_settings_instance_exists(self):
         """Test that global settings instance exists."""
         assert settings is not None
         assert isinstance(settings, Settings)
-    
+
     def test_settings_default_values(self):
         """Test that default settings values are correct."""
         s = Settings()
@@ -666,18 +659,19 @@ class TestSettings:
         assert s.rate_limit_calls == 60
         assert s.rate_limit_period == 3600
         assert s.debug is False
-    
+
     def test_settings_base_url_parsed(self):
         """Test that base_url_parsed returns a yarl URL."""
         from yarl import URL
+
         s = Settings()
         assert isinstance(s.base_url_parsed, URL)
         assert str(s.base_url_parsed) == "https://www.handelsregister.de"
-    
+
     def test_settings_env_prefix(self):
         """Test that settings uses correct env prefix."""
-        assert Settings.model_config.get('env_prefix') == "HRG_"
-    
+        assert Settings.model_config.get("env_prefix") == "HRG_"
+
     def test_settings_custom_values(self):
         """Test creating Settings with custom values."""
         s = Settings(
@@ -688,7 +682,7 @@ class TestSettings:
         assert s.cache_ttl_seconds == 7200
         assert s.max_retries == 5
         assert s.debug is True
-    
+
     def test_settings_cache_dir(self):
         """Test that cache_dir defaults to None."""
         s = Settings()
@@ -697,18 +691,19 @@ class TestSettings:
 
 class TestURLHandling:
     """Unit tests for URL construction using yarl."""
-    
+
     def test_base_url_is_yarl_url(self):
         """Test that BASE_URL is a yarl URL object."""
         from yarl import URL
+
         assert isinstance(BASE_URL, URL)
         assert str(BASE_URL) == "https://www.handelsregister.de"
-    
+
     def test_build_url_basic(self):
         """Test build_url with just a path."""
         url = build_url("rp_web/search")
         assert str(url) == "https://www.handelsregister.de/rp_web/search"
-    
+
     def test_build_url_with_query_params(self):
         """Test build_url with query parameters."""
         url = build_url("rp_web/search", q="Bank", page="1")
@@ -716,7 +711,7 @@ class TestURLHandling:
         assert "https://www.handelsregister.de/rp_web/search" in url_str
         assert "q=Bank" in url_str
         assert "page=1" in url_str
-    
+
     def test_build_url_empty_path(self):
         """Test build_url with empty path returns base URL."""
         url = build_url()
@@ -727,17 +722,18 @@ class TestURLHandling:
 # Unit Tests - Cache
 # =============================================================================
 
+
 class TestCache:
     """Unit tests for caching functionality."""
 
     def test_cache_key_generation(self, temp_cache_dir):
         """Test that cache keys are deterministic."""
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         key1 = cache._get_cache_key("Test", "all")
         key2 = cache._get_cache_key("Test", "all")
         key3 = cache._get_cache_key("Test", "exact")
-        
+
         assert key1 == key2  # Same inputs = same key
         assert key1 != key3  # Different options = different key
         cache.close()
@@ -745,116 +741,116 @@ class TestCache:
     def test_cache_key_is_hash(self, temp_cache_dir):
         """Test that cache keys are valid hex hashes."""
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         key = cache._get_cache_key("Company with spaces / special chars!", "all")
-        
+
         # Should be a 64-character hex string (SHA-256)
         assert len(key) == 64
-        assert all(c in '0123456789abcdef' for c in key)
+        assert all(c in "0123456789abcdef" for c in key)
         cache.close()
-    
+
     def test_cache_get_set(self, temp_cache_dir):
         """Test cache get/set operations."""
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         # Initially empty
         assert cache.get("test", "all") is None
-        
+
         # Set value
         cache.set("test", "all", "<html>cached</html>")
-        
+
         # Get returns the value
         assert cache.get("test", "all") == "<html>cached</html>"
         cache.close()
-    
+
     def test_cache_ttl_expiration(self, temp_cache_dir):
         """Test that expired cache entries are not returned."""
         cache = SearchCache(cache_dir=temp_cache_dir, ttl_seconds=0)
-        
+
         cache.set("test", "all", "<html>cached</html>")
         time.sleep(0.1)  # Wait for expiration
-        
+
         # Expired entry should return None
         assert cache.get("test", "all") is None
         cache.close()
-    
+
     def test_cache_details_ttl(self, temp_cache_dir):
         """Test that details cache uses longer TTL."""
         cache = SearchCache(
-            cache_dir=temp_cache_dir, 
+            cache_dir=temp_cache_dir,
             ttl_seconds=0,  # Search TTL expired
             details_ttl_seconds=3600,  # Details TTL not expired
         )
-        
+
         # Set a details cache entry
         cache.set("details:SI:HRB123", "", "<html>details</html>")
         time.sleep(0.1)
-        
+
         # Details should still be available (longer TTL)
         assert cache.get("details:SI:HRB123", "") == "<html>details</html>"
-        
+
         # But search cache would be expired
         cache.set("search", "all", "<html>search</html>")
         time.sleep(0.1)
         assert cache.get("search", "all") is None
         cache.close()
-    
+
     def test_cache_clear(self, temp_cache_dir):
         """Test clearing the cache."""
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         # Add some entries
         cache.set("search1", "all", "<html>1</html>")
         cache.set("search2", "all", "<html>2</html>")
         cache.set("details:SI:HRB1", "", "<html>d1</html>")
-        
+
         # Clear all
         count = cache.clear()
         assert count == 3
-        
+
         # Verify all cleared
         assert cache.get("search1", "all") is None
         assert cache.get("details:SI:HRB1", "") is None
-        
+
         cache.close()
-    
+
     def test_cache_clear_details_only(self, temp_cache_dir):
         """Test clearing only details cache.
-        
+
         Note: With DiskCache, details_only=True clears all entries
         since we can't efficiently filter by key content after hashing.
         """
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         # Add entries
         cache.set("search1", "all", "<html>search</html>")
         cache.set("details:SI:HRB1", "", "<html>details</html>")
-        
+
         # Clear details only - with DiskCache this clears all entries
         count = cache.clear(details_only=True)
         assert count >= 1  # At least some entries cleared
-        
+
         # With DiskCache, all entries are cleared when details_only=True
         # This is a limitation of the hash-based key storage
         cache.close()
-    
+
     def test_cache_stats(self, temp_cache_dir):
         """Test cache statistics."""
         cache = SearchCache(cache_dir=temp_cache_dir)
-        
+
         # Add entries
         cache.set("search1", "all", "<html>search</html>")
         cache.set("details:SI:HRB1", "", "<html>details</html>")
         cache.set("details:AD:HRB2", "", "<html>details2</html>")
-        
+
         stats = cache.get_stats()
-        
-        assert stats['total_files'] == 3
+
+        assert stats["total_files"] == 3
         # Note: DiskCache doesn't distinguish between search and details entries
-        assert stats['search_files'] == 3  # All counted as search with DiskCache
-        assert stats['details_files'] == 0  # DiskCache doesn't track this
-        assert stats['total_size_bytes'] > 0
-        
+        assert stats["search_files"] == 3  # All counted as search with DiskCache
+        assert stats["details_files"] == 0  # DiskCache doesn't track this
+        assert stats["total_size_bytes"] > 0
+
         cache.close()
 
 
@@ -862,23 +858,25 @@ class TestCache:
 # Unit Tests - Suffix Map
 # =============================================================================
 
+
 class TestSuffixMap:
     """Unit tests for register number suffix handling."""
 
     def test_berlin_suffix(self):
         """Test Berlin HRB suffix mapping."""
-        assert SUFFIX_MAP['Berlin']['HRB'] == ' B'
+        assert SUFFIX_MAP["Berlin"]["HRB"] == " B"
 
     def test_bremen_suffix(self):
         """Test Bremen suffix mapping."""
-        assert SUFFIX_MAP['Bremen']['HRB'] == ' HB'
-        assert SUFFIX_MAP['Bremen']['HRA'] == ' HB'
-        assert SUFFIX_MAP['Bremen']['VR'] == ' HB'
+        assert SUFFIX_MAP["Bremen"]["HRB"] == " HB"
+        assert SUFFIX_MAP["Bremen"]["HRA"] == " HB"
+        assert SUFFIX_MAP["Bremen"]["VR"] == " HB"
 
 
 # =============================================================================
 # Unit Tests - Public API
 # =============================================================================
+
 
 class TestPublicAPI:
     """Unit tests for the public search() function."""
@@ -899,7 +897,7 @@ class TestPublicAPI:
             similar_sounding=True,
             results_per_page=50,
         )
-        
+
         assert opts.keywords == "Test"
         assert opts.keyword_option == "exact"
         assert opts.states == ["BE", "HH"]
@@ -935,34 +933,34 @@ class TestHandelsRegisterClass:
         """Test the from_options class method."""
         opts = SearchOptions(keywords="Test")
         hr = HandelsRegister.from_options(opts, debug=True)
-        
+
         assert hr._debug is True
-        assert hasattr(hr, '_default_options')
+        assert hasattr(hr, "_default_options")
         assert hr._default_options.keywords == "Test"
 
     def test_search_company_requires_args(self):
         """Test that search_company raises error without args."""
         hr = HandelsRegister()
-        
+
         with pytest.raises(ValueError, match="benötigt args"):
             hr.search_company()
-    
+
     def test_get_company_details_invalid_type(self):
         """Test that invalid detail_type raises ValueError."""
         hr = HandelsRegister(debug=False)
-        company = {'name': 'Test', 'register_num': 'HRB 123'}
-        
+        company = {"name": "Test", "register_num": "HRB 123"}
+
         with pytest.raises(ValueError, match="Invalid detail_type"):
             hr.get_company_details(company, detail_type="INVALID")
 
 
 class TestDetailsParserAD:
     """Unit tests for DetailsParser AD (Aktueller Abdruck) parsing."""
-    
+
     @pytest.fixture
     def sample_ad_html(self):
         """Sample HTML from current printout (AD)."""
-        return '''
+        return """
         <html>
         <body>
         <div class="content">
@@ -976,28 +974,33 @@ class TestDetailsParserAD:
         </div>
         </body>
         </html>
-        '''
-    
+        """
+
     def test_parse_ad_basic(self, sample_ad_html):
         """Test parsing AD content."""
-        base_info = {'name': 'Test GmbH', 'register_num': 'HRB 12345', 
-                     'court': 'AG Berlin', 'state': 'Berlin', 'status': 'aktuell'}
+        base_info = {
+            "name": "Test GmbH",
+            "register_num": "HRB 12345",
+            "court": "AG Berlin",
+            "state": "Berlin",
+            "status": "aktuell",
+        }
         details = DetailsParser.parse_ad(sample_ad_html, base_info)
-        
+
         assert details.name == "Test GmbH"
         assert details.legal_form == "Gesellschaft mit beschränkter Haftung"
-    
+
     def test_parse_ad_capital(self, sample_ad_html):
         """Test parsing capital from AD."""
         details = DetailsParser.parse_ad(sample_ad_html)
-        
+
         assert details.capital is not None
         assert "50.000" in details.capital
-    
+
     def test_parse_ad_representatives(self, sample_ad_html):
         """Test parsing representatives from AD."""
         details = DetailsParser.parse_ad(sample_ad_html)
-        
+
         gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
         assert gf is not None
         assert "Schmidt" in gf.name
@@ -1005,11 +1008,11 @@ class TestDetailsParserAD:
 
 class TestDetailsParserUT:
     """Unit tests for DetailsParser UT (Unternehmensträger) parsing."""
-    
+
     @pytest.fixture
     def sample_ut_html(self):
         """Sample HTML from company owners view (UT)."""
-        return '''
+        return """
         <html>
         <body>
         <div>
@@ -1019,20 +1022,25 @@ class TestDetailsParserUT:
         </div>
         </body>
         </html>
-        '''
-    
+        """
+
     def test_parse_ut_owners(self, sample_ut_html):
         """Test parsing owners from UT."""
-        base_info = {'name': 'Test GmbH', 'register_num': 'HRB 12345',
-                     'court': 'AG Berlin', 'state': 'Berlin', 'status': 'aktuell'}
+        base_info = {
+            "name": "Test GmbH",
+            "register_num": "HRB 12345",
+            "court": "AG Berlin",
+            "state": "Berlin",
+            "status": "aktuell",
+        }
         details = DetailsParser.parse_ut(sample_ut_html, base_info)
-        
+
         assert len(details.owners) >= 1
-    
+
     def test_parse_ut_representatives(self, sample_ut_html):
         """Test parsing representatives from UT."""
         details = DetailsParser.parse_ut(sample_ut_html)
-        
+
         gf = next((r for r in details.representatives if r.role == "Geschäftsführer"), None)
         assert gf is not None
         assert "Müller" in gf.name
@@ -1040,7 +1048,7 @@ class TestDetailsParserUT:
 
 class TestPublicAPIGetDetails:
     """Unit tests for the public get_details() function."""
-    
+
     def test_get_details_function_exists(self):
         """Test that get_details function is importable."""
         assert callable(get_details)
@@ -1050,77 +1058,98 @@ class TestPublicAPIGetDetails:
 # Integration Tests - Live API
 # =============================================================================
 
+
 @pytest.mark.integration
 @pytest.mark.slow
 class TestLiveAPI:
     """Integration tests that hit the live Handelsregister API.
-    
+
     These tests are marked with @pytest.mark.integration and @pytest.mark.slow.
     Run with: pytest -m integration
     Skip with: pytest -m "not integration"
     """
 
-    @pytest.mark.parametrize("company,expected_state", [
-        ("Hafen Hamburg", "Hamburg"),
-        ("Bayerische Motoren Werke", "Bayern"),
-        ("Daimler Truck", "Baden-Württemberg"),
-        ("Volkswagen", "Niedersachsen"),
-        ("RWE", "Nordrhein-Westfalen"),
-        ("Fraport", "Hessen"),
-        ("Saarstahl", "Saarland"),
-        ("Mainz", "Rheinland-Pfalz"),
-        ("Nordex", "Mecklenburg-Vorpommern"),
-        ("Jenoptik", "Thüringen"),
-        ("Vattenfall", "Berlin"),
-        ("Bremen", "Bremen"),
-        ("Sachsen", "Sachsen"),
-        ("Magdeburg", "Sachsen-Anhalt"),
-        ("Kiel", "Schleswig-Holstein"),
-        ("Potsdam", "Brandenburg"),
-    ])
-    def test_search_by_state_company(self, company, expected_state):
+    @pytest.mark.parametrize(
+        ("company", "expected_state"),
+        [
+            # Reduced from 16 to 10 states to stay under rate limit
+            # Selected representative states from different regions
+            ("Hafen Hamburg", "Hamburg"),
+            ("Bayerische Motoren Werke", "Bayern"),
+            ("Daimler Truck", "Baden-Württemberg"),
+            ("Volkswagen", "Niedersachsen"),
+            ("RWE", "Nordrhein-Westfalen"),
+            ("Fraport", "Hessen"),
+            ("Vattenfall", "Berlin"),
+            ("Bremen", "Bremen"),
+            ("Kiel", "Schleswig-Holstein"),
+            ("Potsdam", "Brandenburg"),
+        ],
+    )
+    def test_search_by_state_company(self, company, expected_state, shared_hr_client):
         """Test searching for companies in different German states."""
-        args = argparse.Namespace(
-            debug=False,
-            force=True,
-            schlagwoerter=company,
-            schlagwortOptionen='all',
-            json=False
-        )
-        hr = HandelsRegister(args)
-        hr.open_startpage()
-        companies = hr.search_company()
-        
+        # Use shared client if available, otherwise create new one
+        if shared_hr_client:
+            # Create search options directly for shared client
+            from handelsregister import SearchOptions
+
+            opts = SearchOptions(
+                keywords=company,
+                keyword_option="all",
+            )
+            companies = shared_hr_client.search_with_options(opts, force_refresh=False)
+        else:
+            # Fallback: create new client (shouldn't happen with fixture)
+            args = argparse.Namespace(
+                debug=False,
+                force=False,  # Use cache to reduce API calls
+                schlagwoerter=company,
+                schlagwortOptionen="all",
+                json=False,
+            )
+            hr = HandelsRegister(args)
+            hr.open_startpage()
+            companies = hr.search_company()
+
         assert companies is not None
         assert len(companies) > 0
 
-    def test_haus_anker_b_suffix(self):
+    def test_haus_anker_b_suffix(self, shared_hr_client):
         """Test that Berlin companies get the B suffix."""
-        args = argparse.Namespace(
-            debug=False,
-            force=True,
-            schlagwoerter='Haus-Anker Verwaltungs GmbH',
-            schlagwortOptionen='exact',
-            json=False
-        )
-        hr = HandelsRegister(args)
-        hr.open_startpage()
-        companies = hr.search_company()
-        
+        if shared_hr_client:
+            # Use shared client with SearchOptions
+            opts = SearchOptions(
+                keywords="Haus-Anker Verwaltungs GmbH",
+                keyword_option="exact",
+            )
+            companies = shared_hr_client.search_with_options(opts, force_refresh=False)
+        else:
+            # Fallback: create new client
+            args = argparse.Namespace(
+                debug=False,
+                force=False,  # Use cache to reduce API calls
+                schlagwoerter="Haus-Anker Verwaltungs GmbH",
+                schlagwortOptionen="exact",
+                json=False,
+            )
+            hr = HandelsRegister(args)
+            hr.open_startpage()
+            companies = hr.search_company()
+
         assert companies is not None
-        
-        target = next((c for c in companies if '138434' in (c.get('register_num') or '')), None)
-        
+
+        target = next((c for c in companies if "138434" in (c.get("register_num") or "")), None)
+
         assert target is not None, "Haus-Anker Verwaltungs GmbH with expected number not found"
-        assert target['register_num'] == 'HRB 138434 B'
+        assert target["register_num"] == "HRB 138434 B"
 
     def test_search_function_simple(self):
         """Test the simple search() function API."""
-        results = search("GASAG AG", keyword_option="exact", force_refresh=True)
-        
+        results = search("GASAG AG", keyword_option="exact", force_refresh=False)  # Use cache
+
         assert results is not None
         assert len(results) > 0
-        assert any("GASAG" in r.get('name', '') for r in results)
+        assert any("GASAG" in r.get("name", "") for r in results)
 
     def test_search_function_with_states(self):
         """Test search() with state filtering."""
@@ -1128,37 +1157,34 @@ class TestLiveAPI:
             "Bank",
             states=["BE"],
             register_type="HRB",
-            force_refresh=True,
-        )
-        
-        assert results is not None
-        assert len(results) > 0
-        
-        # Count how many results include Berlin
-        # The website filter isn't 100% precise, but most results should be from Berlin
-        berlin_count = sum(
-            1 for r in results 
-            if r.get('state') and 'Berlin' in r['state']
-        )
-        
-        # At least 50% of results should be from Berlin to confirm filter is working
-        assert berlin_count > 0, "No results from Berlin found"
-        assert berlin_count >= len(results) // 2, (
-            f"Expected most results from Berlin, got {berlin_count}/{len(results)}"
+            force_refresh=False,  # Use cache
         )
 
-    def test_search_with_options_method(self):
+        assert results is not None
+        assert len(results) > 0
+
+        # Count how many results include Berlin
+        # The website filter isn't 100% precise, but most results should be from Berlin
+        berlin_count = sum(1 for r in results if r.get("state") and "Berlin" in r["state"])
+
+        # At least 50% of results should be from Berlin to confirm filter is working
+        assert berlin_count > 0, "No results from Berlin found"
+        assert (
+            berlin_count >= len(results) // 2
+        ), f"Expected most results from Berlin, got {berlin_count}/{len(results)}"
+
+    def test_search_with_options_method(self, shared_hr_client):
         """Test HandelsRegister.search_with_options() method."""
         opts = SearchOptions(
             keywords="Deutsche Bahn",
             keyword_option="all",
         )
-        
-        hr = HandelsRegister(debug=False)
-        hr.open_startpage()
-        results = hr.search_with_options(opts, force_refresh=True)
-        
+
+        # Use shared client if available
+        hr = shared_hr_client or HandelsRegister(debug=False)
+        if not shared_hr_client:
+            hr.open_startpage()
+        results = hr.search_with_options(opts, force_refresh=False)  # Use cache
+
         assert results is not None
         assert len(results) > 0
-
-
