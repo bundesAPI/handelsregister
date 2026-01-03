@@ -91,7 +91,7 @@ See [Data Models: CompanyDetails](models.md#handelsregister.CompanyDetails) for 
 
 ## main
 
-::: handelsregister.main
+::: handelsregister.cli.main
     options:
       show_root_heading: true
       show_source: false
