@@ -1,0 +1,194 @@
+site_name: Handelsregister Documentation
+site_description: Python package for the German commercial register portal
+site_author: BundesAPI Contributors
+site_url: https://bundesapi.github.io/handelsregister
+
+repo_name: bundesAPI/handelsregister
+repo_url: https://github.com/bundesAPI/handelsregister
+
+copyright: Copyright &copy; 2025 BundesAPI Contributors
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Fira Sans
+    code: Fira Code
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/file-document-multiple
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: de
+          name: Deutsch
+          build: true
+          nav_translations:
+            Home: Startseite
+            Getting Started: Erste Schritte
+            Installation: Installation
+            Quickstart: Schnellstart
+            User Guide: User Guide
+            Overview: Übersicht
+            Using as Library: Als Library verwenden
+            Command Line (CLI): Kommandozeile (CLI)
+            Fetching Details: Unternehmensdetails abrufen
+            Caching: Caching
+            API Reference: Quellcodebeschreibung
+            Public Functions: Öffentliche Funktionen
+            Classes: Klassen
+            Data Models: Datenmodelle
+            Exceptions: Exceptions
+            Reference Tables: Referenztabellen
+            State Codes: Bundesländer-Codes
+            Register Types: Registerarten
+            Legal Forms: Rechtsformen
+            API Parameters: API-Parameter
+            Examples: Beispiele
+            Simple: Einfache
+            Advanced: Fortgeschritten
+            Integrations: Integrationen
+            Legal Notice: Rechtliche Hinweise
+            Changelog: Changelog
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            docstring_section_style: spacy
+            heading_level: 2
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      title: On this page
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: bundesAPI
+      repo: handelsregister
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bundesAPI
+      name: BundesAPI on GitHub
+  generator: false
+  alternate:
+    - name: English
+      link: /handelsregister/
+      lang: en
+    - name: Deutsch
+      link: /handelsregister/de/
+      lang: de
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quickstart: quickstart.md
+  - User Guide:
+    - Overview: guide/index.md
+    - Using as Library: guide/library.md
+    - Command Line (CLI): guide/cli.md
+    - Fetching Details: guide/details.md
+    - Caching: guide/cache.md
+  - API Reference:
+    - Overview: api/index.md
+    - Public Functions: api/functions.md
+    - Classes: api/classes.md
+    - Data Models: api/models.md
+    - Exceptions: api/exceptions.md
+  - Reference Tables:
+    - State Codes: reference/states.md
+    - Register Types: reference/registers.md
+    - Legal Forms: reference/legal-forms.md
+    - API Parameters: reference/parameters.md
+  - Examples:
+    - Simple Examples: examples/simple.md
+    - Advanced: examples/advanced.md
+    - Integrations: examples/integrations.md
+  - Legal Notice: legal.md
+  - Changelog: changelog.md

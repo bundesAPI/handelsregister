@@ -1,275 +1,362 @@
-# Handelsregister API 
+# Handelsregister
 
-Das Handelsregister stellt ein öffentliches Verzeichnis dar, das im Rahmen des Registerrechts Eintragungen über die angemeldeten Kaufleute in einem bestimmten geografischen Raum führt. 
-Eintragungspflichtig sind die im HGB, AktG und GmbHG abschließend aufgezählten Tatsachen oder Rechtsverhältnisse. Eintragungsfähig sind weitere Tatsachen, wenn Sinn und Zweck des Handelsregisters die Eintragung erfordern und für ihre Eintragung ein erhebliches Interesse des Rechtsverkehrs besteht.
+Python-Package für das gemeinsame Registerportal der deutschen Bundesländer.
 
-Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumente ist daher gemäß § 9 Abs. 1 HGB jeder und jedem zu Informationszwecken gestattet, wobei es unzulässig ist, mehr als 60 Abrufe pro Stunde zu tätigen (vgl. [Nutzungsordnung](https://www.handelsregister.de/rp_web/information.xhtml)). Die Recherche nach einzelnen Firmen, die Einsicht in die Unternehmensträgerdaten und die Nutzung der Handelsregisterbekanntmachungen ist kostenfrei möglich.
+Nutzbar als **Kommandozeilen-Tool** oder als **Library** in eigenen Anwendungen.
 
-**Achtung:** Das Registerportal ist regelmäßig das Ziel automatisierter Massenabfragen. Den Ausführungen der [FAQs](https://www.handelsregister.de/rp_web/information.xhtml) zufolge erreiche die Frequenz dieser Abfragen sehr häufig eine Höhe, bei der die Straftatbestände der Rechtsnormen §§303a, b StGB vorliege. Mehr als 60 Abrufe pro Stunde widersprechen der Nutzungsordnung.
+## Rechtliche Hinweise
 
+Das Handelsregister stellt ein öffentliches Verzeichnis dar, das im Rahmen des Registerrechts Eintragungen über die angemeldeten Kaufleute in einem bestimmten geografischen Raum führt. Eintragungspflichtig sind die im HGB, AktG und GmbHG abschließend aufgezählten Tatsachen oder Rechtsverhältnisse.
 
-## Handelsregister
+Die Einsichtnahme in das Handelsregister sowie in die dort eingereichten Dokumente ist gemäß **§ 9 Abs. 1 HGB** jeder Person zu Informationszwecken gestattet. Die Recherche nach einzelnen Firmen, die Einsicht in die Unternehmensträgerdaten und die Nutzung der Handelsregisterbekanntmachungen ist kostenfrei möglich.
 
-### Datenstruktur
+> **⚠️ Achtung:** Es ist unzulässig, mehr als **60 Abrufe pro Stunde** zu tätigen (vgl. [Nutzungsordnung](https://www.handelsregister.de/rp_web/information.xhtml)). Das Registerportal ist regelmäßig das Ziel automatisierter Massenabfragen. Den [FAQs](https://www.handelsregister.de/rp_web/information.xhtml) zufolge erreiche die Frequenz dieser Abfragen sehr häufig eine Höhe, bei der die Straftatbestände der Rechtsnormen **§§ 303a, b StGB** vorliegen.
+
+## Installation
+
+Installation mit [uv](https://docs.astral.sh/uv/) (empfohlen):
+
+```bash
+git clone https://github.com/bundesAPI/handelsregister.git
+cd handelsregister
+uv sync
+```
+
+Alternativ mit pip:
+
+```bash
+pip install git+https://github.com/bundesAPI/handelsregister.git
+```
+
+## Verwendung als Library
+
+### Einfache API
+
+```python
+from handelsregister import search, State, RegisterType
+
+# Einfache Suche
+unternehmen = search("Deutsche Bahn")
+
+# Mit Optionen (empfohlen: Enums für Autovervollständigung)
+banken = search(
+    keywords="Bank",
+    states=[State.BE, State.HH],    # Nur Berlin und Hamburg
+    register_type=RegisterType.HRB, # Nur HRB-Einträge
+    include_deleted=False,          # Keine gelöschten
+)
+
+# String-basierte API funktioniert weiterhin
+banken = search(
+    keywords="Bank",
+    states=["BE", "HH"],
+    register_type="HRB",
+    include_deleted=False,
+)
+
+# Ergebnisse verarbeiten
+for firma in banken:
+    print(f"{firma['name']} - {firma['register_num']}")
+    print(f"  Gericht: {firma['court']}")
+    print(f"  Status: {firma['status']}")
+```
+
+### Erweiterte API
+
+Für mehr Kontrolle kann die `HandelsRegister`-Klasse direkt verwendet werden:
+
+```python
+from handelsregister import (
+    HandelsRegister, SearchOptions, SearchCache,
+    State, KeywordMatch, RegisterType
+)
+
+# Mit SearchOptions (empfohlen: Enums)
+options = SearchOptions(
+    keywords="Energie",
+    keyword_option=KeywordMatch.ALL,
+    states=[State.BY, State.BW],
+    register_type=RegisterType.HRB,
+    similar_sounding=True,      # Phonetische Suche
+    results_per_page=100,
+)
+
+# String-basierte API funktioniert weiterhin
+options = SearchOptions(
+    keywords="Energie",
+    keyword_option="all",
+    states=["BY", "BW"],
+    register_type="HRB",
+    similar_sounding=True,
+    results_per_page=100,
+)
+
+hr = HandelsRegister(debug=False)
+hr.open_startpage()
+ergebnisse = hr.search_with_options(options)
+
+# Mit eigenem Cache
+cache = SearchCache(ttl_seconds=7200)  # 2 Stunden TTL
+hr = HandelsRegister(cache=cache)
+```
+
+### Detailabruf
+
+Zu Suchergebnissen können erweiterte Unternehmensinformationen abgerufen werden:
+
+```python
+from handelsregister import search, get_details, KeywordMatch
+
+# Erst suchen (empfohlen: Enum)
+unternehmen = search("GASAG AG", keyword_option=KeywordMatch.EXACT)
+
+# String-basierte API funktioniert weiterhin
+unternehmen = search("GASAG AG", keyword_option="exact")
+
+# Dann Details abrufen
+if unternehmen:
+    details = get_details(unternehmen[0], detail_type="SI")
+    
+    print(f"Firma: {details.name}")
+    print(f"Rechtsform: {details.legal_form}")
+    print(f"Kapital: {details.capital} {details.currency}")
+    print(f"Adresse: {details.address}")
+    
+    for gf in details.representatives:
+        print(f"  {gf.role}: {gf.name}")
+```
+
+**Verfügbare Detail-Typen:**
+
+| Typ | Beschreibung |
+|-----|--------------|
+| `SI` | Strukturierter Registerinhalt (empfohlen, maschinenlesbar) |
+| `AD` | Aktueller Abdruck (formatierter Text) |
+| `UT` | Unternehmensträger (Gesellschafter/Inhaber) |
+
+### Rückgabeformat
+
+**Suchergebnisse** werden als Dictionary zurückgegeben:
+
+```python
+{
+    'name': 'GASAG AG',
+    'court': 'Berlin District court Berlin (Charlottenburg) HRB 44343',
+    'register_num': 'HRB 44343 B',
+    'state': 'Berlin',
+    'status': 'currently registered',
+    'statusCurrent': 'CURRENTLY_REGISTERED',
+    'documents': 'ADCDHDDKUTVÖSI',
+    'history': [('Alter Firmenname', 'Berlin')]
+}
+```
+
+**CompanyDetails** enthält erweiterte Informationen:
+
+```python
+{
+    'name': 'GASAG AG',
+    'register_num': 'HRB 44343 B',
+    'court': 'Amtsgericht Berlin (Charlottenburg)',
+    'state': 'Berlin',
+    'status': 'aktuell',
+    'legal_form': 'Aktiengesellschaft',
+    'capital': '307.200.000',
+    'currency': 'EUR',
+    'address': {
+        'street': 'GASAG-Platz 1',
+        'postal_code': '10965',
+        'city': 'Berlin',
+        'country': 'Deutschland'
+    },
+    'purpose': 'Versorgung mit Energie...',
+    'representatives': [
+        {'name': 'Dr. Max Mustermann', 'role': 'Vorstand', 'location': 'Berlin'}
+    ],
+    'owners': [],
+    'registration_date': '01.01.1990',
+    'last_update': None,
+    'deletion_date': None
+}
+```
+
+## Verwendung als CLI
+
+Die CLI kann über `handelsregister` oder die kürzere Variante `hrg` aufgerufen werden.
+
+### Kommandozeilen-Schnittstelle
+
+```
+handelsregister.py [-h] [-d] [-f] [-j] -s SCHLAGWÖRTER [-so OPTION]
+                   [--states CODES] [--register-type TYP]
+                   [--register-number NUMMER] [--include-deleted]
+                   [--similar-sounding] [--results-per-page N]
+                   [--details] [--detail-type TYP]
+
+Optionen:
+  -h, --help            Hilfe anzeigen
+  -d, --debug           Debug-Modus aktivieren
+  -f, --force           Cache ignorieren und neue Daten abrufen
+  -j, --json            Ausgabe als JSON
+
+Suchparameter:
+  -s, --schlagwoerter   Suchbegriffe (erforderlich)
+  -so, --schlagwortOptionen
+                        Suchmodus: all=alle Begriffe; min=mindestens einer; exact=exakter Name
+  --states CODES        Kommagetrennte Bundesland-Codes (z.B. BE,BY,HH)
+  --register-type TYP   Registerart filtern (HRA, HRB, GnR, PR, VR)
+  --register-number     Nach bestimmter Registernummer suchen
+  --include-deleted     Auch gelöschte Einträge anzeigen
+  --similar-sounding    Phonetische Suche (Kölner Phonetik)
+  --results-per-page N  Ergebnisse pro Seite (10, 25, 50, 100)
+
+Detailoptionen:
+  --details             Erweiterte Unternehmensinfos abrufen
+  --detail-type TYP     Art der Details: SI=strukturiert, AD=Abdruck, UT=Inhaber
+```
+
+### Bundesland-Codes
+
+| Code | Bundesland |
+|------|------------|
+| BW | Baden-Württemberg |
+| BY | Bayern |
+| BE | Berlin |
+| BR | Brandenburg |
+| HB | Bremen |
+| HH | Hamburg |
+| HE | Hessen |
+| MV | Mecklenburg-Vorpommern |
+| NI | Niedersachsen |
+| NW | Nordrhein-Westfalen |
+| RP | Rheinland-Pfalz |
+| SL | Saarland |
+| SN | Sachsen |
+| ST | Sachsen-Anhalt |
+| SH | Schleswig-Holstein |
+| TH | Thüringen |
+
+### Beispiele
+
+```bash
+# Einfache Suche
+uv run handelsregister -s "Deutsche Bahn" -so all
+# Oder kürzer:
+uv run hrg -s "Deutsche Bahn" -so all
+
+# Suche mit JSON-Ausgabe
+uv run handelsregister -s "GASAG AG" -so exact --json
+# Oder:
+uv run hrg -s "GASAG AG" -so exact --json
+
+# Nach Bundesland und Registerart filtern
+uv run handelsregister -s "Bank" --states BE,HH --register-type HRB
+# Oder:
+uv run hrg -s "Bank" --states BE,HH --register-type HRB
+
+# Gelöschte Einträge mit phonetischer Suche
+uv run handelsregister -s "Mueller" --include-deleted --similar-sounding
+
+# Cache ignorieren (neue Daten abrufen)
+uv run handelsregister -s "Volkswagen" -f --debug
+
+# Mit Detailabruf (Geschäftsführer, Kapital, Adresse)
+uv run handelsregister -s "GASAG AG" --details
+
+# Details als JSON (für Weiterverarbeitung)
+uv run handelsregister -s "GASAG AG" --details --json
+
+# Spezifischer Detail-Typ (Unternehmensträger)
+uv run handelsregister -s "Test GmbH" --details --detail-type UT
+```
+
+## Tests
+
+```bash
+# Unit-Tests ausführen (schnell, ohne Netzwerkzugriff)
+uv run pytest
+
+# Alle Tests inkl. Integrationstests (greift auf Live-API zu)
+uv run pytest -m integration
+
+# Mit ausführlicher Ausgabe
+uv run pytest -v
+```
+
+## API-Parameter
 
 ***URL:*** https://www.handelsregister.de/rp_web/erweitertesuche.xhtml
 
-Das gemeinsame Registerportal der Länder ermöglicht jeder und jedem die Recherche nach einzelnen Firmen zu Informationszwecken. Einträge lassen sich dabei über verschiedene Parameter im Body eines POST-request filtern:
-
-
-**Parameter:** *schlagwoerter*  (Optional)
-
-Schlagwörter (z.B. Test). Zulässige Platzhalterzeichen sind für die Suche nach genauen Firmennamen (siehe Parameter *schlagwortOptionen*) \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
-
-
-**Parameter:** *schlagwortOptionen*  (Optional)
-- 1
-- 2
-- 3
-
-Schlagwortoptionen: 1=alle Schlagwörter enthalten; 2=mindestens ein Schlagwort enthalten; 3=den genauen Firmennamen enthalten.
-
-
-**Parameter:** *suchOptionenAehnlich*  (Optional)
-- true
-
-true=ähnlich lautende Schlagwörter enthalten. Unter der Ähnlichkeitssuche ist die sogenannte phonetische Suche zu verstehen. Hierbei handelt es sich um ein Verfahren, welches Zeichenketten und ähnlich ausgesprochene Worte als identisch erkennt. Grundlage für die Vergleichsoperation ist hier die insbesondere im Bereich der öffentlichen Verwaltung angewandte sogenannte Kölner Phonetik.
-
-
-**Parameter:** *suchOptionenGeloescht*  (Optional)
-- true
-
-true=auch gelöschte Formen finden.
-
-
-**Parameter:** *suchOptionenNurZNneuenRechts*  (Optional)
-- true
-
-true=nur nach Zweigniederlassungen neuen Rechts suchen.
-
-
-**Parameter:** *btnSuche*  (Optional)
-- Suchen
-
-Button "Suchen"
-
-
-**Parameter:** *suchTyp*  (Optional)
-- n
-- e
-
-Suchtyp: n=normal; e=extended. Die normale Suche erlaubt eine Suche über den gesamten Registerdatenbestand der Länder anhand einer überschaubaren Anzahl von Suchkriterien. Die erweiterte Suche bietet neben den Auswahlkriterien der normalen Suche die selektive Suche in den Datenbeständen ausgewählter Länder, die Suche nach Rechtsformen und die Suche nach Adressen an.
-
-
-**Parameter:** *ergebnisseProSeite*  (Optional)
-- 10
-- 25
-- 50
-- 100
-
-Ergebnisse pro Seite.
-
-
-**Parameter:** *niederlassung*  (Optional)
-
-Niederlassung / Sitz. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
-
-
-**Parameter:** *bundeslandBW*  (Optional)
-- on
-
-Einträge aus Baden-Württemberg
-
-
-**Parameter:** *bundeslandBY*  (Optional)
-- on
-
-Einträge aus Bayern
-
-
-**Parameter:** *bundeslandBE*  (Optional)
-- on
-
-Einträge aus Berlin
-
-
-**Parameter:** *bundeslandBR*  (Optional)
-- on
-
-Einträge aus Bradenburg
-
-
-**Parameter:** *bundeslandHB*  (Optional)
-- on
-
-Einträge aus Bremen
-
-
-**Parameter:** *bundeslandHH*  (Optional)
-- on
-
-Einträge aus Hamburg
-
-
-**Parameter:** *bundeslandHE*  (Optional)
-- on
-
-Einträge aus Hessen
-
-
-**Parameter:** *bundeslandMV*  (Optional)
-- on
-
-Einträge aus Mecklenburg-Vorpommern
-
-
-**Parameter:** *bundeslandNI*  (Optional)
-- on
-
-Einträge aus Niedersachsen
-
-
-**Parameter:** *bundeslandNW*  (Optional)
-- on
-
-Einträge aus Nordrhein-Westfalen
-
-
-**Parameter:** *bundeslandRP*  (Optional)
-- on
-
-Einträge aus Rheinland-Pfalz
-
-
-**Parameter:** *bundeslandSL*  (Optional)
-- on
-
-Einträge aus Saarland
-
-
-**Parameter:** *bundeslandSN*  (Optional)
-- on
-
-Einträge aus Sachsen
-
-
-**Parameter:** *bundeslandST*  (Optional)
-- on
-
-Einträge aus Sachsen-Anhalt
-
-
-**Parameter:** *bundeslandSH*  (Optional)
-- on
-
-Einträge aus Schleswig-Holstein
-
-
-**Parameter:** *bundeslandTH*  (Optional)
-- on
-
-Einträge aus Thüringen
-
-
-**Parameter:** *registerArt*  (Optional)
-- alle
-- HRA
-- HRB
-- GnR
-- PR
-- VR
-
-Registerart (Angaben nur zur Hauptniederlassung): alle; HRA; HRB; GnR; PR; VR.
-
-
-**Parameter:** *registerNummer*  (Optional)
-
-Registernummer (Angaben nur zur Hauptniederlassung).
-
-
-**Parameter:** *registerGericht*  (Optional)
-
-Registergericht (Angaben nur zur Hauptniederlassung). Beispielsweise D3201 für Ansbach
-
-
-**Parameter:** *rechtsform*  (Optional)
-- 1
-- 2
-- 3
-- 4
-- 5
-- 6
-- 7
-- 8
-- 9
-- 10
-- 12
-- 13
-- 14
-- 15
-- 16
-- 17
-- 18
-- 19
-- 40
-- 46
-- 48
-- 49
-- 51
-- 52
-- 53
-- 54
-- 55
-
-Rechtsform (Angaben nur zur Hauptniederlassung). 1=Aktiengesellschaft; 2=eingetragene Genossenschaft; 3=eingetragener Verein; 4=Einzelkauffrau; 5=Einzelkaufmann; 6=Europäische Aktiengesellschaft (SE); 7=Europäische wirtschaftliche Interessenvereinigung; 8=Gesellschaft mit beschränkter Haftung; 9=HRA Juristische Person; 10=Kommanditgesellschaft; 12=Offene Handelsgesellschaft; 13=Partnerschaft; 14=Rechtsform ausländischen Rechts GnR; 15=Rechtsform ausländischen Rechts HRA; 16=Rechtsform ausländischen Rechts HRb; 17=Rechtsform ausländischen Rechts PR; 18=Seerechtliche Gesellschaft; 19=Versicherungsverein auf Gegenseitigkeit; 40=Anstalt öffentlichen Rechts; 46=Bergrechtliche Gesellschaft; 48=Körperschaft öffentlichen Rechts; 49= Europäische Genossenschaft (SCE); 51=Stiftung privaten Rechts; 52=Stiftung öffentlichen Rechts; 53=HRA sonstige Rechtsformen; 54=Sonstige juristische Person; 55=Einzelkaufmann/Einzelkauffrau
-
-
-**Parameter:** *postleitzahl*  (Optional)
-
-Postleitzahl (Angaben nur zur Hauptniederlassung). Beispielsweise 90537 für Feucht. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
-
-
-
-**Parameter:** *ort*  (Optional)
-
-Ort (Angaben nur zur Hauptniederlassung). Beispielsweise Feucht. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
-
-
-
-**Parameter:** *strasse*  (Optional)
-
-Straße (Angaben nur zur Hauptniederlassung). Beispielsweise Teststraße 2. Zulässige Platzhalterzeichen sind \* und ? - wobei das Sternchen für beliebig viele (auch kein) Zeichen steht, das Fragezeichen hingegen für genau ein Zeichen. 
-
-### Installation with poetry
-Example installation and execution with [poetry](https://python-poetry.org/):
-```commandline
-git clone https://github.com/bundesAPI/handelsregister.git
-cd handelsregister
-poetry install
-poetry run python handelsregister.py -s "deutsche bahn" -so all
-```
-Run tests:
-```commandline
-poetry run python -m pytest
-```
-
-
-### Command-line Interface
-
-Das CLI ist _work in progress_ und 
-
-```
-usage: handelsregister.py [-h] [-d] [-f] -s SCHLAGWOERTER [-so {all,min,exact}]
-
-A handelsregister CLI
-
-options:
-  -h, --help            show this help message and exit
-  -d, --debug           Enable debug mode and activate logging
-  -f, --force           Force a fresh pull and skip the cache
-  -s SCHLAGWOERTER, --schlagwoerter SCHLAGWOERTER
-                        Search for the provided keywords
-  -so {all,min,exact}, --schlagwortOptionen {all,min,exact}
-                        Keyword options: all=contain all keywords; min=contain at least one
-                        keyword; exact=contain the exact company name.
-```
+Das gemeinsame Registerportal der Länder ermöglicht die Recherche nach einzelnen Firmen zu Informationszwecken. Einträge lassen sich über verschiedene Parameter filtern:
+
+### Suchparameter
+
+| Parameter | Werte | Beschreibung |
+|-----------|-------|--------------|
+| `schlagwoerter` | Text | Suchbegriffe. Platzhalter: `*` (beliebig viele Zeichen), `?` (genau ein Zeichen) |
+| `schlagwortOptionen` | 1, 2, 3 | 1=alle enthalten; 2=mindestens einer; 3=exakter Firmenname |
+| `suchOptionenAehnlich` | true | Phonetische Suche (Kölner Phonetik) |
+| `suchOptionenGeloescht` | true | Auch gelöschte Firmen finden |
+| `ergebnisseProSeite` | 10, 25, 50, 100 | Anzahl Ergebnisse pro Seite |
+
+### Filterparameter
+
+| Parameter | Werte | Beschreibung |
+|-----------|-------|--------------|
+| `registerArt` | alle, HRA, HRB, GnR, PR, VR | Registerart |
+| `registerNummer` | Text | Registernummer |
+| `registerGericht` | Code | Registergericht (z.B. D3201 für Ansbach) |
+| `niederlassung` | Text | Niederlassung / Sitz |
+| `postleitzahl` | Text | Postleitzahl |
+| `ort` | Text | Ort |
+| `strasse` | Text | Straße |
+
+### Bundesland-Filter
+
+| Parameter | Bundesland |
+|-----------|------------|
+| `bundeslandBW` | Baden-Württemberg |
+| `bundeslandBY` | Bayern |
+| `bundeslandBE` | Berlin |
+| `bundeslandBR` | Brandenburg |
+| `bundeslandHB` | Bremen |
+| `bundeslandHH` | Hamburg |
+| `bundeslandHE` | Hessen |
+| `bundeslandMV` | Mecklenburg-Vorpommern |
+| `bundeslandNI` | Niedersachsen |
+| `bundeslandNW` | Nordrhein-Westfalen |
+| `bundeslandRP` | Rheinland-Pfalz |
+| `bundeslandSL` | Saarland |
+| `bundeslandSN` | Sachsen |
+| `bundeslandST` | Sachsen-Anhalt |
+| `bundeslandSH` | Schleswig-Holstein |
+| `bundeslandTH` | Thüringen |
+
+### Rechtsformen
+
+| Code | Rechtsform |
+|------|------------|
+| 1 | Aktiengesellschaft |
+| 2 | Eingetragene Genossenschaft |
+| 3 | Eingetragener Verein |
+| 4 | Einzelkauffrau |
+| 5 | Einzelkaufmann |
+| 6 | Europäische Aktiengesellschaft (SE) |
+| 7 | Europäische wirtschaftliche Interessenvereinigung |
+| 8 | Gesellschaft mit beschränkter Haftung |
+| 9 | HRA Juristische Person |
+| 10 | Kommanditgesellschaft |
+| 12 | Offene Handelsgesellschaft |
+| 13 | Partnerschaft |
+| 18 | Seerechtliche Gesellschaft |
+| 19 | Versicherungsverein auf Gegenseitigkeit |
+| 40 | Anstalt öffentlichen Rechts |
+| 46 | Bergrechtliche Gesellschaft |
+| 48 | Körperschaft öffentlichen Rechts |
+| 49 | Europäische Genossenschaft (SCE) |
+| 51 | Stiftung privaten Rechts |
+| 52 | Stiftung öffentlichen Rechts |
+
+## Lizenz
+
+Dieses Projekt ist Teil der [bundesAPI](https://github.com/bundesAPI) Initiative.

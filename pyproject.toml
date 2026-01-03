@@ -1,38 +1,117 @@
-[[source]]
-url = "https://pypi.org/simple"
-verify_ssl = true
-name = "pypi"
-
-[tool.poetry.dependencies]
-python = ">3.6.2,<4"
-mechanize = "*"
-mechanicalsoup = "*"
-
-[tool.poetry.dev-dependencies]
-black = "^22.6.0"
-
-[tool.poetry]
+[project]
 name = "handelsregister"
-version = "0.1.0"
-description = ""
-authors = ["BundesAPI <kontakt@bund.dev>"]
+version = "0.3.0"
+description = "Python-Package für das deutsche Handelsregister"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "BundesAPI", email = "kontakt@bund.dev" },
+    { name = "maximiliancw", email = "wunderkind-serie0f@icloud.com" }
+]
+keywords = ["handelsregister", "germany", "commercial-register", "cli", "api"]
+requires-python = ">=3.9"
+
+dependencies = [
+    "mechanize>=0.4.8",
+    "beautifulsoup4>=4.11.0",
+    "diskcache>=5.6.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "tenacity>=8.2.0",
+    "ratelimit>=2.2.1",
+    "python-dateutil>=2.8.0",
+    "yarl>=1.9.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6.0",
+    "pytest>=7.0.0",
+    "pre-commit>=3.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+    "mkdocs-static-i18n>=1.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/bundesAPI/handelsregister"
+Repository = "https://github.com/bundesAPI/handelsregister"
+Issues = "https://github.com/bundesAPI/handelsregister/issues"
+
+[project.scripts]
+handelsregister = "handelsregister.cli:main"
+hrg = "handelsregister.cli:main"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-envlist = py36,py37,py38,py310
-isolated_build = True
+[dependency-groups]
+dev = [
+    "ruff>=0.6.0",
+    "pytest>=7.0.0",
+    "pre-commit>=3.0.0",
+]
 
-[tox:.package]
-basepython = python3
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests that hit live API (deselect with '-m \"not integration\"')",
+    "slow: marks tests as slow running (deselect with '-m \"not slow\"')",
+]
 
-[testenv]
-deps = pytest
-usedevelop = true
-commands =
-    pytest
-"""
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "T10", # flake8-debugger
+    "EM",  # flake8-errmsg
+    "ISC", # flake8-implicit-str-concat
+    "ICN", # flake8-import-conventions
+    "PIE", # flake8-pie
+    "PT",  # flake8-pytest-style
+    "Q",   # flake8-quotes
+    "RSE", # flake8-raise
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate (commented-out code)
+    "PD",  # pandas-vet
+    "PGH", # pygrep-hooks
+    "PL",  # Pylint
+    "TRY", # tryceratops
+    "NPY", # NumPy-specific rules
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "PLR0913", # too-many-arguments (can be too strict)
+    "PLR2004", # magic-value-used-in-comparison (too strict for constants)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"test_*.py" = ["ARG", "S101", "PLR2004"]  # Allow unused arguments, assert, and magic values in tests
+"conftest.py" = ["ARG", "F401"]  # Allow unused arguments and imports in conftest
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
