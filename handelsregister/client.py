@@ -37,6 +37,27 @@ from .settings import (
 logger = logging.getLogger(__name__)
 
 
+def _with_retry_and_rate_limit(func):
+    """Decorator that applies rate limiting and retry logic to a method.
+    
+    Combines rate limiting (60 calls/hour) with exponential backoff retry
+    logic for network operations. This decorator stack is reused across
+    all network operations in HandelsRegister.
+    """
+    decorated = sleep_and_retry(
+        limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)(
+            retry(
+                stop=stop_after_attempt(MAX_RETRIES),
+                wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
+                retry=retry_if_exception_type(urllib.error.URLError),
+                before_sleep=before_sleep_log(logger, logging.WARNING),
+                reraise=True,
+            )(func)
+        )
+    )
+    return decorated
+
+
 class HandelsRegister:
     """Browser-Automatisierung für die Handelsregister-Suche.
     
@@ -126,15 +147,7 @@ class HandelsRegister:
         """Gets the cache directory path."""
         return self.cache.cache_dir
     
-    @sleep_and_retry
-    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
-    @retry(
-        stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
-        retry=retry_if_exception_type(urllib.error.URLError),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
+    @_with_retry_and_rate_limit
     def open_startpage(self) -> None:
         """Opens the Handelsregister start page with automatic retries.
         
@@ -250,15 +263,7 @@ class HandelsRegister:
         self._navigate_to_search()
         return self._submit_search(search_opts)
     
-    @sleep_and_retry
-    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
-    @retry(
-        stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
-        retry=retry_if_exception_type(urllib.error.URLError),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
+    @_with_retry_and_rate_limit
     def _navigate_to_search(self) -> None:
         """Navigates from start page to extended search form with retries.
         
@@ -293,15 +298,7 @@ class HandelsRegister:
         
         logger.debug("Page title after navigation: %s", self.browser.title())
     
-    @sleep_and_retry
-    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
-    @retry(
-        stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
-        retry=retry_if_exception_type(urllib.error.URLError),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
+    @_with_retry_and_rate_limit
     def _submit_search(self, search_opts: SearchOptions) -> str:
         """Submits the search form and returns results HTML with retries.
         
@@ -474,15 +471,7 @@ class HandelsRegister:
             raise last_error
         raise NetworkError("Failed to fetch company details after all attempts")
     
-    @sleep_and_retry
-    @limits(calls=RATE_LIMIT_CALLS, period=RATE_LIMIT_PERIOD)
-    @retry(
-        stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=RETRY_WAIT_MIN, max=RETRY_WAIT_MAX),
-        retry=retry_if_exception_type(urllib.error.URLError),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
-        reraise=True,
-    )
+    @_with_retry_and_rate_limit
     def _fetch_detail_page(self, company: Company, detail_type: str) -> str:
         """Fetches a detail page for a company with retries.
         
