@@ -9,7 +9,6 @@ from typing import Literal, Optional, Union
 from .client import HandelsRegister
 from .constants import (
     REGISTER_TYPES,
-    RESULTS_PER_PAGE_OPTIONS,
     STATE_CODES,
     KeywordMatch,
     RegisterType,
@@ -119,29 +118,6 @@ State codes: {state_codes_help}
         dest="similar_sounding",
         help="Use phonetic/similarity search (Kölner Phonetik)",
         action="store_true",
-    )
-    search_group.add_argument(
-        "--results-per-page",
-        dest="results_per_page",
-        help="Number of results per page",
-        type=int,
-        choices=RESULTS_PER_PAGE_OPTIONS,
-        default=100,
-        metavar="N",
-    )
-
-    # Detail options
-    detail_group = parser.add_argument_group("Detail options")
-    detail_group.add_argument(
-        "--details", help="Fetch detailed information for each company result", action="store_true"
-    )
-    detail_group.add_argument(
-        "--detail-type",
-        dest="detail_type",
-        help="Type of details to fetch: SI=structured, AD=printout, UT=owners",
-        choices=["SI", "AD", "UT"],
-        default="SI",
-        metavar="TYPE",
     )
 
     args = parser.parse_args()
@@ -456,7 +432,7 @@ def pr_company_details(details: CompanyDetails) -> None:
     print()
 
 
-def main() -> int:  # noqa: PLR0912
+def main() -> int:
     """Main entry point for the CLI.
 
     Returns:
@@ -468,34 +444,15 @@ def main() -> int:  # noqa: PLR0912
         hr = HandelsRegister(args)
         hr.open_startpage()
 
-        fetch_details = getattr(args, "details", False)
-        detail_type = getattr(args, "detail_type", "SI")
+        companies = hr.search_company()
 
-        if fetch_details:
-            search_opts = hr._build_search_options()
-            companies_details = hr.search_with_details(
-                search_opts,
-                fetch_details=True,
-                detail_type=detail_type,
-                force_refresh=getattr(args, "force", False),
-                show_progress=not args.json,  # Show progress unless JSON output
-            )
-
-            if companies_details:
-                if args.json:
-                    print(json.dumps([d.to_dict() for d in companies_details]))
-                else:
-                    for details in companies_details:
-                        pr_company_details(details)
-        else:
-            companies = hr.search_company()
-
-            if companies:
-                if args.json:
-                    print(json.dumps(companies))
-                else:
-                    for c in companies:
-                        pr_company_info(c)
+        if companies:
+            if args.json:
+                # Serialize Company objects to dicts for JSON output
+                print(json.dumps([c.to_dict() for c in companies], ensure_ascii=False))
+            else:
+                for c in companies:
+                    pr_company_info(c)
 
         return 0  # noqa: TRY300
     except NetworkError as e:
