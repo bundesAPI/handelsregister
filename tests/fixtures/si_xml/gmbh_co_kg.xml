@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Registerinhalt>
+    <Firma>Muster GmbH und Co. KG</Firma>
+    <Rechtsform>GmbH und Co. KG</Rechtsform>
+    <Registernummer>HRA 98765</Registernummer>
+    <Registergericht>Amtsgericht Muenchen</Registergericht>
+    <Status>aktuell eingetragen</Status>
+    <Geschaeftsanschrift>
+        <Strasse>Leopoldstrasse 42</Strasse>
+        <PLZ>80802</PLZ>
+        <Ort>Muenchen</Ort>
+    </Geschaeftsanschrift>
+    <Gegenstand>Handel mit Waren aller Art</Gegenstand>
+    <Vertretung>
+        <Person>
+            <Name>Muster Verwaltungs GmbH</Name>
+            <Funktion>Persoenlich haftender Gesellschafter</Funktion>
+            <Ort>Muenchen</Ort>
+        </Person>
+    </Vertretung>
+    <Kommanditisten>
+        <Person>
+            <Vorname>Hans</Vorname>
+            <Name>Muster</Name>
+            <Einlage>50000,00 EUR</Einlage>
+        </Person>
+        <Person>
+            <Vorname>Anna</Vorname>
+            <Name>Muster</Name>
+            <Einlage>50000,00 EUR</Einlage>
+        </Person>
+    </Kommanditisten>
+    <Eintragungsdatum>01.07.2015</Eintragungsdatum>
+</Registerinhalt>

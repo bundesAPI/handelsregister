@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Registerinhalt>
+    <Firma>Test GmbH</Firma>
+    <Rechtsform>Gesellschaft mit beschraenkter Haftung</Rechtsform>
+    <Registernummer>HRB 12345 B</Registernummer>
+    <Registergericht>Amtsgericht Berlin (Charlottenburg)</Registergericht>
+    <Status>aktuell eingetragen</Status>
+    <Stammkapital>
+        <Betrag>25000,00</Betrag>
+        <Waehrung>EUR</Waehrung>
+    </Stammkapital>
+    <Geschaeftsanschrift>
+        <Strasse>Musterstrasse 123</Strasse>
+        <PLZ>10115</PLZ>
+        <Ort>Berlin</Ort>
+        <Land>Deutschland</Land>
+    </Geschaeftsanschrift>
+    <Gegenstand>Entwicklung und Vertrieb von Software</Gegenstand>
+    <Geschaeftsfuehrung>
+        <Person>
+            <Vorname>Max</Vorname>
+            <Name>Mustermann</Name>
+            <Ort>Berlin</Ort>
+            <Funktion>Geschaeftsfuehrer</Funktion>
+        </Person>
+    </Geschaeftsfuehrung>
+    <Gesellschafter>
+        <Person>
+            <Name>Holding GmbH</Name>
+            <Anteil>100%</Anteil>
+        </Person>
+    </Gesellschafter>
+    <Eintragungsdatum>15.03.2020</Eintragungsdatum>
+</Registerinhalt>

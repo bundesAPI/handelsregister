@@ -86,4 +86,4 @@ desktop.ini
 *~
 
 # Pre-commit
-.pre-commit-config.yaml.bak
+.pre-commit-config.yaml.bak!tests/fixtures/**/*.xml

@@ -62,6 +62,7 @@ from .settings import (
     Settings,
     settings,
 )
+from .si_xml import SIXMLParser, parse_si_xml
 
 # Package metadata
 __version__ = "0.3.0"
@@ -103,10 +104,12 @@ __all__ = [
     "SearchCache",
     "SearchOptions",
     "Settings",
+    "SIXMLParser",
     "build_url",
     "get_companies_in_searchresults",
     "get_details",
     "parse_result",
+    "parse_si_xml",
     "pr_company_details",
     "pr_company_info",
     "schlagwortOptionen",

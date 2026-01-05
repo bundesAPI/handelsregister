@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Registerinhalt>
+    <Firma>GASAG AG</Firma>
+    <Rechtsform>Aktiengesellschaft</Rechtsform>
+    <Registernummer>HRB 44343 B</Registernummer>
+    <Registergericht>Amtsgericht Berlin (Charlottenburg)</Registergericht>
+    <Status>aktuell eingetragen</Status>
+    <Grundkapital>307200000,00 EUR</Grundkapital>
+    <Geschaeftsanschrift>
+        <Strasse>GASAG-Platz 1</Strasse>
+        <PLZ>10965</PLZ>
+        <Ort>Berlin</Ort>
+    </Geschaeftsanschrift>
+    <Gegenstand>Die Versorgung der Bevoelkerung mit Gas, Waerme und anderen Energien sowie die Erbringung aller damit zusammenhaengenden Dienstleistungen.</Gegenstand>
+    <Vorstand>
+        <Person>
+            <Vorname>Georg</Vorname>
+            <Name>Friedrichs</Name>
+            <Ort>Berlin</Ort>
+        </Person>
+        <Person>
+            <Vorname>Stefan</Vorname>
+            <Name>Krampitz</Name>
+            <Ort>Berlin</Ort>
+        </Person>
+    </Vorstand>
+    <Eintragungsdatum>01.01.1990</Eintragungsdatum>
+    <Aenderungsdatum>15.06.2024</Aenderungsdatum>
+</Registerinhalt>
